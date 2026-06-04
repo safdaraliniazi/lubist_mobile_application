@@ -11,9 +11,12 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
 
 // Assets exported 1:1 from Figma ("Onboarding - Vibrant Luxury").
@@ -47,11 +50,22 @@ const colors = {
   tileShadow: 'rgba(134, 83, 0, 0.18)',
 };
 
+type Navigation = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
+
+const COUNTRY_CODE = '91';
+
 export function SignInScreen() {
   const { signIn } = useAuth();
+  const navigation = useNavigation<Navigation>();
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const isContinueEnabled = phoneNumber.length >= 10;
+
+  // No network yet: this just advances to the OTP screen. Wire to
+  // POST /auth/login/phone/send-otp later (404 -> navigate to Signup).
+  const handleContinue = () => {
+    navigation.navigate('OtpVerify', { phone: phoneNumber, countryCode: COUNTRY_CODE });
+  };
 
   return (
     <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
@@ -74,10 +88,22 @@ export function SignInScreen() {
               <BrandHeader />
               <LoginForm
                 isContinueEnabled={isContinueEnabled}
-                onContinue={() => signIn('client')}
+                onContinue={handleContinue}
                 onChangePhone={(value) => setPhoneNumber(value.replace(/[^\d]/g, ''))}
                 phoneNumber={phoneNumber}
               />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Pressable onPress={() => navigation.navigate('EmailLogin')} style={styles.emailButton}>
+                <Ionicons color={colors.link} name="mail-outline" size={18} />
+                <Text style={styles.emailButtonText}>Continue with Email</Text>
+              </Pressable>
+
               <LegalActions onGuest={() => signIn('client')} />
             </View>
           </ScrollView>
@@ -357,6 +383,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     letterSpacing: 0.7,
+  },
+  divider: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 20,
+  },
+  dividerLine: {
+    backgroundColor: colors.divider,
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    color: colors.guest,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  emailButton: {
+    alignItems: 'center',
+    backgroundColor: colors.bgBottom,
+    borderColor: colors.inputBorder,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    height: 56,
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  emailButtonText: {
+    color: colors.link,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
   },
   legalActions: {
     alignItems: 'center',

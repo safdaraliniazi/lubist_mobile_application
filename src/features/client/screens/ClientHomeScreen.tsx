@@ -95,6 +95,7 @@ export function ClientHomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
+  const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -123,7 +124,7 @@ export function ClientHomeScreen() {
 
         <ServicesForYou />
 
-        <BeautyEssentials />
+        <BeautyEssentials onOpen={openCatalog} />
 
         <TopRatedSalons onOpen={openSalon} />
       </ScrollView>
@@ -337,7 +338,7 @@ function ServicesForYou() {
   );
 }
 
-function BeautyEssentials() {
+function BeautyEssentials({ onOpen }: { onOpen: (category: string) => void }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -347,7 +348,7 @@ function BeautyEssentials() {
 
       <View style={styles.essentialsRow}>
         {essentials.map((item) => (
-          <View key={item.id} style={styles.essentialItem}>
+          <Pressable key={item.id} onPress={() => onOpen(item.label)} style={styles.essentialItem}>
             <View style={styles.essentialCircle}>
               {item.image ? (
                 <Image source={item.image} style={styles.essentialImage} />
@@ -356,7 +357,7 @@ function BeautyEssentials() {
               ) : null}
             </View>
             <Text style={styles.essentialLabel}>{item.label}</Text>
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>

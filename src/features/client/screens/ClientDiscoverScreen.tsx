@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { auraWellness, luminaStudio } from '@/features/client/data/salons';
@@ -37,7 +39,25 @@ const colors = {
   giftStripText: '#FFF8F4',
   favBg: 'rgba(255, 255, 255, 0.8)',
   dotInactive: 'rgba(255, 255, 255, 0.6)',
+  // Sort sheet
+  overlay: 'rgba(0, 0, 0, 0.4)',
+  handle: '#E2E2E2',
+  sortMuted: '#5D5F5F',
+  sortSelectedBg: 'rgba(233, 30, 99, 0.05)',
+  sortSelected: '#E91E63',
+  radioIdle: 'rgba(217, 195, 173, 0.5)',
 };
+
+const sortOptions = [
+  { id: 'popularity', label: 'Popularity', icon: 'flame-outline' as const },
+  { id: 'new', label: 'New Arrivals', icon: 'sparkles-outline' as const },
+  { id: 'price-low', label: 'Price: Low to High', icon: 'arrow-up-outline' as const },
+  { id: 'price-high', label: 'Price: High to Low', icon: 'arrow-down-outline' as const },
+  { id: 'top-rated', label: 'Top Rated', icon: 'star-outline' as const },
+  { id: 'best-sellers', label: 'Best Sellers', icon: 'trophy-outline' as const },
+  { id: 'discount', label: 'Discount', icon: 'pricetag-outline' as const },
+  { id: 'favorites', label: 'Customer Favorites', icon: 'heart-outline' as const },
+];
 
 type DiscoverNavigation = BottomTabNavigationProp<ClientTabParamList>;
 
@@ -45,6 +65,7 @@ export function ClientDiscoverScreen() {
   const navigation = useNavigation<DiscoverNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
+  const [sortOpen, setSortOpen] = useState(false);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -52,7 +73,7 @@ export function ClientDiscoverScreen() {
         onBack={() => navigation.navigate('Home')}
         onCart={() => navigation.navigate('Shopping')}
       />
-      <SearchSection />
+      <SearchSection onSort={() => setSortOpen(true)} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.resultsHeader}>
@@ -88,7 +109,68 @@ export function ClientDiscoverScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <SortSheet onClose={() => setSortOpen(false)} visible={sortOpen} />
     </SafeAreaView>
+  );
+}
+
+function SortSheet({ onClose, visible }: { onClose: () => void; visible: boolean }) {
+  const [selected, setSelected] = useState('popularity');
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
+      <Pressable onPress={onClose} style={styles.sheetOverlay} />
+      <View style={styles.sheet}>
+        <View style={styles.sheetHeader}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Sort By</Text>
+          <Text style={styles.sheetSubtitle}>Choose how you want products to be displayed</Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.sortList} showsVerticalScrollIndicator={false}>
+          {sortOptions.map((option) => {
+            const isSelected = option.id === selected;
+
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => setSelected(option.id)}
+                style={[styles.sortRow, isSelected && styles.sortRowSelected]}
+              >
+                <View style={styles.sortLeft}>
+                  <Ionicons
+                    color={isSelected ? colors.sortSelected : colors.sortMuted}
+                    name={option.icon}
+                    size={19}
+                  />
+                  <Text style={styles.sortLabel}>{option.label}</Text>
+                </View>
+                <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                  {isSelected ? <View style={styles.radioDot} /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.sheetFooter}>
+          <Pressable onPress={onClose}>
+            <LinearGradient
+              colors={[colors.gold, '#F6A400']}
+              end={{ x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }}
+              style={styles.applyButton}
+            >
+              <Text style={styles.applyText}>Apply Sorting</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable onPress={() => setSelected('popularity')} style={styles.resetButton}>
+            <Text style={styles.resetText}>Reset</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -112,7 +194,7 @@ function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void
   );
 }
 
-function SearchSection() {
+function SearchSection({ onSort }: { onSort: () => void }) {
   return (
     <View style={styles.searchSection}>
       <View style={styles.searchInputWrap}>
@@ -123,7 +205,7 @@ function SearchSection() {
           style={styles.searchInput}
         />
       </View>
-      <Pressable style={styles.filterButton}>
+      <Pressable onPress={onSort} style={styles.filterButton}>
         <Ionicons color={colors.white} name="options-outline" size={16} />
       </Pressable>
     </View>
@@ -470,5 +552,117 @@ const styles = StyleSheet.create({
   },
   chipTextUnisex: {
     color: colors.chipUnisex,
+  },
+  sheetOverlay: {
+    backgroundColor: colors.overlay,
+    flex: 1,
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    bottom: 0,
+    left: 0,
+    maxHeight: '85%',
+    position: 'absolute',
+    right: 0,
+  },
+  sheetHeader: {
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+  },
+  sheetHandle: {
+    backgroundColor: colors.handle,
+    borderRadius: 12,
+    height: 4,
+    width: 48,
+  },
+  sheetTitle: {
+    alignSelf: 'stretch',
+    color: colors.heading,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.2,
+    marginTop: 8,
+  },
+  sheetSubtitle: {
+    alignSelf: 'stretch',
+    color: colors.sortMuted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19.5,
+  },
+  sortList: {
+    gap: 4,
+    paddingHorizontal: 16,
+  },
+  sortRow: {
+    alignItems: 'center',
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 16,
+  },
+  sortRowSelected: {
+    backgroundColor: colors.sortSelectedBg,
+  },
+  sortLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 16,
+  },
+  sortLabel: {
+    color: colors.heading,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+  },
+  radio: {
+    alignItems: 'center',
+    borderColor: colors.radioIdle,
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  radioSelected: {
+    backgroundColor: colors.sortSelected,
+    borderColor: colors.sortSelected,
+  },
+  radioDot: {
+    backgroundColor: colors.white,
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  sheetFooter: {
+    backgroundColor: colors.white,
+    gap: 12,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  applyButton: {
+    alignItems: 'center',
+    borderRadius: 4,
+    paddingVertical: 16,
+  },
+  applyText: {
+    color: colors.white,
+    fontFamily: 'Montserrat_400Regular',
+    fontSize: 16,
+  },
+  resetButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  resetText: {
+    color: colors.sortMuted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
 });

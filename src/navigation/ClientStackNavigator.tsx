@@ -6,6 +6,9 @@ import { SalonServicesScreen } from '@/features/client/screens/SalonServicesScre
 import { SelectTimeScreen } from '@/features/client/screens/SelectTimeScreen';
 import { CheckoutScreen } from '@/features/client/screens/CheckoutScreen';
 import { BookingConfirmedScreen } from '@/features/client/screens/BookingConfirmedScreen';
+import { ProductCatalogScreen } from '@/features/client/screens/ProductCatalogScreen';
+import { ProductDetailScreen } from '@/features/client/screens/ProductDetailScreen';
+import { CartScreen } from '@/features/client/screens/CartScreen';
 
 import { ClientStackParamList } from './navigation.types';
 
@@ -20,6 +23,9 @@ export function ClientStackNavigator() {
       <Stack.Screen component={SelectTimeScreen} name="SelectTime" />
       <Stack.Screen component={CheckoutScreen} name="Checkout" />
       <Stack.Screen component={BookingConfirmedScreen} name="BookingConfirmed" />
+      <Stack.Screen component={ProductCatalogScreen} name="ProductCatalog" />
+      <Stack.Screen component={ProductDetailScreen} name="ProductDetail" />
+      <Stack.Screen component={CartScreen} name="Cart" />
     </Stack.Navigator>
   );
 }

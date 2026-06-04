@@ -23,6 +23,16 @@ export type SalonRouteData = {
 
 export type AuthStackParamList = {
   SignIn: undefined;
+  OtpVerify: {
+    phone: string;
+    countryCode: string;
+  };
+  Signup: {
+    phone?: string;
+    countryCode?: string;
+  };
+  EmailLogin: undefined;
+  ForgotPassword: undefined;
 };
 
 export type VendorTabParamList = {
@@ -56,6 +66,13 @@ export type ClientStackParamList = {
   BookingConfirmed: {
     serviceName?: string;
   };
+  ProductCatalog: {
+    category?: string;
+  };
+  ProductDetail: {
+    productName?: string;
+  };
+  Cart: undefined;
 };
 
 export type AdminStackParamList = {
