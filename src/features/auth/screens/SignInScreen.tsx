@@ -4,311 +4,392 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/store/AuthContext';
 
-const collageImages = [
-  // Replace these remote placeholders with brand-approved local assets when available.
-  'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80',
-];
+// Assets exported 1:1 from Figma ("Onboarding - Vibrant Luxury").
+const logo = require('@/assets/auth/lubist-logo.png');
+const collageSpa = require('@/assets/auth/collage-spa.png');
+const collageNails = require('@/assets/auth/collage-nails.png');
+const collageHair = require('@/assets/auth/collage-hair.png');
+const collageSkincare = require('@/assets/auth/collage-skincare.png');
 
 const colors = {
-  background: '#f7f0e8',
-  card: '#fffaf4',
-  cardShadow: '#c8b29e',
-  text: '#2b221d',
-  muted: '#7b6d63',
-  subtle: '#b39c8d',
-  border: '#eadfd4',
-  input: '#f2e7da',
-  gold: '#d48b37',
-  goldDark: '#b76b1e',
-  white: '#ffffff',
+  bgTop: '#FFF8F4',
+  bgMid: '#F0E0D1',
+  bgBottom: '#FFFFFF',
+  card: 'rgba(255, 248, 244, 0.95)',
+  tileOverlay: 'rgba(248, 158, 7, 0.1)',
+  heading: '#221A11',
+  inputBg: '#F6E5D7',
+  inputBorder: '#F0E0D1',
+  divider: 'rgba(217, 195, 173, 0.5)',
+  code: '#534433',
+  chevron: 'rgba(83, 68, 51, 0.7)',
+  placeholder: 'rgba(83, 68, 51, 0.5)',
+  ctaStart: '#F89E07',
+  ctaEnd: '#FFB962',
+  ctaShadow: 'rgba(248, 158, 7, 0.25)',
+  ctaText: '#FFFFFF',
+  legal: 'rgba(83, 68, 51, 0.7)',
+  link: '#865300',
+  support: '#534433',
+  guest: '#867461',
+  tileShadow: 'rgba(134, 83, 0, 0.18)',
 };
 
 export function SignInScreen() {
   const { signIn } = useAuth();
-  const { height } = useWindowDimensions();
   const [phoneNumber, setPhoneNumber] = useState('');
 
-  const collageHeight = Math.min(Math.max(height * 0.4, 260), 340);
   const isContinueEnabled = phoneNumber.length >= 10;
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardShell}
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
+      <LinearGradient
+        colors={[colors.bgTop, colors.bgMid, colors.bgBottom]}
+        style={styles.gradient}
       >
-        <View style={styles.screen}>
-          <View style={[styles.collage, { height: collageHeight }]}>
-            <View style={styles.column}>
-              <Image source={{ uri: collageImages[0] }} style={[styles.imageTile, styles.leftTop]} />
-              <Image
-                source={{ uri: collageImages[2] }}
-                style={[styles.imageTile, styles.leftBottom]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Collage />
+
+            <View style={styles.card}>
+              <BrandHeader />
+              <LoginForm
+                isContinueEnabled={isContinueEnabled}
+                onContinue={() => signIn('client')}
+                onChangePhone={(value) => setPhoneNumber(value.replace(/[^\d]/g, ''))}
+                phoneNumber={phoneNumber}
               />
+              <LegalActions onGuest={() => signIn('client')} />
             </View>
-
-            <View style={styles.column}>
-              <Image
-                source={{ uri: collageImages[1] }}
-                style={[styles.imageTile, styles.rightTop]}
-              />
-              <Image
-                source={{ uri: collageImages[3] }}
-                style={[styles.imageTile, styles.rightBottom]}
-              />
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.logoWrap}>
-              <Text style={styles.logoMark}>✦</Text>
-              <Text style={styles.brand}>LUBIST</Text>
-              <Text style={styles.brandSub}>BEAUTY & SPA SALON</Text>
-              <Text style={styles.tagline}>Luxury You Aspire</Text>
-            </View>
-
-            <View style={styles.form}>
-              <View style={styles.phoneInputShell}>
-                <Pressable style={styles.countryCode}>
-                  <Text style={styles.countryCodeText}>+91</Text>
-                  <Text style={styles.countryArrow}>⌄</Text>
-                </Pressable>
-                <View style={styles.divider} />
-                <TextInput
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  onChangeText={(value) => setPhoneNumber(value.replace(/[^\d]/g, ''))}
-                  placeholder="Enter Mobile Number"
-                  placeholderTextColor={colors.subtle}
-                  style={styles.input}
-                  value={phoneNumber}
-                />
-              </View>
-
-              <Pressable
-                disabled={!isContinueEnabled}
-                onPress={() => signIn('client')}
-                style={({ pressed }) => [
-                  styles.continueButton,
-                  !isContinueEnabled && styles.continueButtonDisabled,
-                  pressed && isContinueEnabled && styles.continueButtonPressed,
-                ]}
-              >
-                <Text style={styles.continueButtonText}>CONTINUE</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.termsText}>
-              By continuing you agree to our{' '}
-              <Text style={styles.linkText}>Terms of Service</Text> and{' '}
-              <Text style={styles.linkText}>Privacy Policy</Text>
-            </Text>
-
-            <Pressable style={styles.footerAction}>
-              <Text style={styles.footerText}>
-                Having issues signing up? <Text style={styles.footerLink}>Contact Support</Text>
-              </Text>
-            </Pressable>
-
-            <Pressable onPress={() => signIn('client')} style={styles.footerAction}>
-              <Text style={styles.footerText}>Continue as guest</Text>
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
+  );
+}
+
+function Collage() {
+  return (
+    <View style={styles.collage}>
+      <View style={styles.collageRow}>
+        <View style={styles.leftColumn}>
+          <Tile source={collageSpa} style={styles.tileSpa} />
+          <Tile source={collageNails} style={styles.tileNails} />
+        </View>
+        <View style={styles.rightColumn}>
+          <Tile source={collageHair} style={styles.tileHair} />
+          <Tile source={collageSkincare} style={styles.tileSkincare} />
+        </View>
+      </View>
+
+      <LinearGradient
+        colors={['rgba(255, 248, 244, 0)', colors.bgTop]}
+        style={styles.bottomFade}
+      />
+    </View>
+  );
+}
+
+function Tile({ source, style }: { source: number; style: object }) {
+  return (
+    <View style={[styles.tile, style]}>
+      <Image source={source} style={styles.tileImage} />
+      <View style={styles.tileOverlay} />
+    </View>
+  );
+}
+
+function BrandHeader() {
+  return (
+    <View style={styles.brand}>
+      <Image resizeMode="contain" source={logo} style={styles.logo} />
+      <Text style={styles.tagline}>Luxury You Aspire</Text>
+    </View>
+  );
+}
+
+function LoginForm({
+  isContinueEnabled,
+  onChangePhone,
+  onContinue,
+  phoneNumber,
+}: {
+  isContinueEnabled: boolean;
+  onChangePhone: (value: string) => void;
+  onContinue: () => void;
+  phoneNumber: string;
+}) {
+  return (
+    <View style={styles.form}>
+      <View style={styles.phoneInput}>
+        <Pressable style={styles.countryCode}>
+          <Text style={styles.countryCodeText}>+91</Text>
+          <Ionicons color={colors.chevron} name="chevron-down" size={12} />
+        </Pressable>
+        <TextInput
+          keyboardType="number-pad"
+          maxLength={10}
+          onChangeText={onChangePhone}
+          placeholder="Enter Mobile Number"
+          placeholderTextColor={colors.placeholder}
+          style={styles.input}
+          value={phoneNumber}
+        />
+      </View>
+
+      <Pressable
+        disabled={!isContinueEnabled}
+        onPress={onContinue}
+        style={({ pressed }) => [
+          styles.ctaShadow,
+          !isContinueEnabled && styles.ctaDisabled,
+          pressed && isContinueEnabled && styles.ctaPressed,
+        ]}
+      >
+        <LinearGradient
+          colors={[colors.ctaStart, colors.ctaEnd]}
+          end={{ x: 1, y: 0 }}
+          start={{ x: 0, y: 0 }}
+          style={styles.cta}
+        >
+          <Text style={styles.ctaText}>CONTINUE</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+function LegalActions({ onGuest }: { onGuest: () => void }) {
+  return (
+    <View style={styles.legalActions}>
+      <Text style={styles.legalText}>
+        By continuing you agree to our <Text style={styles.legalLink}>Terms of Service</Text> and{' '}
+        <Text style={styles.legalLink}>Privacy Policy</Text>
+      </Text>
+
+      <View style={styles.secondaryActions}>
+        <Pressable>
+          <Text style={styles.supportText}>Having issues signing up? Contact Support</Text>
+        </Pressable>
+        <Pressable onPress={onGuest}>
+          <Text style={styles.guestText}>Continue as guest</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgTop,
     flex: 1,
   },
-  keyboardShell: {
+  gradient: {
     flex: 1,
   },
-  screen: {
-    backgroundColor: colors.background,
+  flex: {
     flex: 1,
-    justifyContent: 'space-between',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   collage: {
+    height: 438,
+  },
+  collageRow: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    gap: 12,
+    paddingHorizontal: 16,
   },
-  column: {
+  leftColumn: {
     flex: 1,
-    gap: 10,
+    gap: 12,
+    paddingTop: 32,
   },
-  imageTile: {
-    borderRadius: 12,
+  rightColumn: {
+    flex: 1,
+    gap: 12,
+  },
+  tile: {
+    borderRadius: 8,
+    elevation: 6,
+    overflow: 'hidden',
+    shadowColor: colors.tileShadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+  },
+  tileImage: {
+    height: '100%',
     width: '100%',
   },
-  leftTop: {
-    flex: 1.08,
+  tileOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.tileOverlay,
   },
-  leftBottom: {
-    flex: 0.92,
+  tileSpa: {
+    height: 192,
   },
-  rightTop: {
-    flex: 0.9,
+  tileNails: {
+    height: 128,
   },
-  rightBottom: {
-    flex: 1.1,
+  tileHair: {
+    height: 144,
+  },
+  tileSkincare: {
+    height: 208,
+  },
+  bottomFade: {
+    bottom: 0,
+    height: 128,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
   card: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    elevation: 10,
+    elevation: 12,
+    marginTop: -48,
+    paddingBottom: 40,
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 18,
-    shadowColor: colors.cardShadow,
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-  },
-  logoWrap: {
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  logoMark: {
-    color: colors.gold,
-    fontSize: 28,
-    marginBottom: 6,
+    paddingTop: 16,
+    shadowColor: 'rgba(134, 83, 0, 0.18)',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 1,
+    shadowRadius: 40,
   },
   brand: {
-    color: colors.goldDark,
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: 4,
+    alignItems: 'center',
+    paddingBottom: 32,
   },
-  brandSub: {
-    color: colors.goldDark,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 2.2,
-    marginTop: 4,
+  logo: {
+    height: 100,
+    width: 250,
   },
   tagline: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
+    color: colors.heading,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 22,
+    letterSpacing: -0.44,
+    lineHeight: 28.6,
+    marginTop: -1,
+    textAlign: 'center',
   },
   form: {
-    gap: 14,
+    gap: 16,
   },
-  phoneInputShell: {
+  phoneInput: {
     alignItems: 'center',
-    backgroundColor: colors.input,
-    borderColor: colors.border,
+    backgroundColor: colors.inputBg,
+    borderColor: colors.inputBorder,
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 54,
-    overflow: 'hidden',
+    height: 56,
+    paddingHorizontal: 16,
   },
   countryCode: {
     alignItems: 'center',
+    borderRightColor: colors.divider,
+    borderRightWidth: 1,
     flexDirection: 'row',
-    gap: 4,
-    height: '100%',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
+    gap: 8,
+    height: 32,
+    paddingRight: 12,
   },
   countryCodeText: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  countryArrow: {
-    color: colors.muted,
-    fontSize: 16,
-    marginTop: -2,
-  },
-  divider: {
-    backgroundColor: '#d4c2b4',
-    height: 24,
-    width: 1,
+    color: colors.code,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    letterSpacing: 0.14,
   },
   input: {
-    color: colors.text,
+    color: colors.code,
     flex: 1,
-    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
     height: '100%',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
-  continueButton: {
-    alignItems: 'center',
-    backgroundColor: colors.gold,
+  ctaShadow: {
     borderRadius: 12,
-    height: 52,
-    justifyContent: 'center',
-    shadowColor: colors.gold,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
+    elevation: 8,
+    shadowColor: colors.ctaShadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
   },
-  continueButtonDisabled: {
+  ctaDisabled: {
     opacity: 0.55,
   },
-  continueButtonPressed: {
-    backgroundColor: colors.goldDark,
+  ctaPressed: {
+    opacity: 0.9,
   },
-  continueButtonText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 1.6,
+  cta: {
+    alignItems: 'center',
+    borderRadius: 12,
+    height: 56,
+    justifyContent: 'center',
   },
-  termsText: {
-    color: colors.muted,
-    fontSize: 12.5,
-    lineHeight: 20,
-    marginTop: 18,
-    paddingHorizontal: 8,
+  ctaText: {
+    color: colors.ctaText,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    letterSpacing: 0.7,
+  },
+  legalActions: {
+    alignItems: 'center',
+    gap: 16,
+    paddingTop: 32,
+  },
+  legalText: {
+    color: colors.legal,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    lineHeight: 22.75,
+    maxWidth: 280,
     textAlign: 'center',
   },
-  linkText: {
-    color: colors.goldDark,
+  legalLink: {
+    color: colors.link,
     textDecorationLine: 'underline',
   },
-  footerAction: {
+  secondaryActions: {
     alignItems: 'center',
-    marginTop: 12,
+    gap: 11,
+    paddingTop: 15,
   },
-  footerText: {
-    color: colors.muted,
-    fontSize: 13.5,
-    lineHeight: 20,
+  supportText: {
+    color: colors.support,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     textAlign: 'center',
   },
-  footerLink: {
-    color: colors.text,
-    fontWeight: '600',
+  guestText: {
+    color: colors.guest,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

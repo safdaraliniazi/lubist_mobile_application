@@ -12,7 +12,7 @@ export function AuthNavigator() {
       <Stack.Screen
         name="SignIn"
         component={SignInScreen}
-        options={{ title: 'Choose Workspace' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

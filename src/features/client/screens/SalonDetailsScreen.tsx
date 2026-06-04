@@ -16,60 +16,52 @@ import { lumiereBeautyStudio } from '@/features/client/data/salons';
 import type { ClientStackParamList, SalonRouteData } from '@/navigation/navigation.types';
 
 const colors = {
-  background: '#f7f0e8',
-  surface: '#fffaf4',
-  surfaceStrong: '#fffdf8',
-  text: '#2f221a',
-  muted: '#7d6d63',
-  subtle: '#a89182',
-  border: '#eadccf',
-  gold: '#d88a37',
-  goldDark: '#bf7021',
-  green: '#4b8b5d',
-  greenSoft: '#edf6ef',
-  chip: '#f2e5d8',
+  background: '#FFFAF5',
+  surface: '#FFF6EC',
+  surfaceStrong: '#FFF6EC',
+  text: '#221A11',
+  muted: '#534433',
+  subtle: '#655D52',
+  border: 'rgba(217, 195, 173, 0.4)',
+  gold: '#F89E07',
+  goldDark: '#F89E07',
+  green: '#22C55E',
+  greenSoft: '#22C55E',
+  chip: '#F0E0D1',
+  action: '#FFF1E6',
+  avatar: '#E8B7A6',
   white: '#ffffff',
 };
 
-const salonThumb1 =
-  'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
-const salonThumb2 =
-  'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=600&q=80';
-const salonThumb3 =
-  'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80';
-const salonThumb4 =
-  'https://images.unsplash.com/photo-1600334129128-685c5582fd35?auto=format&fit=crop&w=600&q=80';
-const salonThumb5 =
-  'https://images.unsplash.com/photo-1633681926035-ec1ac984418a?auto=format&fit=crop&w=600&q=80';
-const serviceHairCare =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80';
-const serviceNail =
-  'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=600&q=80';
-const serviceFace =
-  'https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&w=600&q=80';
-const reviewImage1 =
-  'https://images.unsplash.com/photo-1526045478516-99145907023c?auto=format&fit=crop&w=600&q=80';
-const reviewImage2 =
-  'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=600&q=80';
-const mapPreview =
-  'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1200&q=80';
-// Replace the remote assets above with final local brand assets when available.
+// All assets exported 1:1 from Figma ("Salon display page").
+const heroImg = require('@/assets/salon/hero.png');
+const avatarEleanor = require('@/assets/salon/avatar-eleanor.png');
+const review1 = require('@/assets/salon/review1.png');
+const review2 = require('@/assets/salon/review2.png');
+const mapImg = require('@/assets/salon/map.png');
 
-const thumbnails = [salonThumb1, salonThumb2, salonThumb3, salonThumb4, salonThumb5];
+// Gallery slot 5 reuses slot 4's image (it sits behind the "+12 More" overlay in Figma).
+const gallery = [
+  require('@/assets/salon/gallery1.png'),
+  require('@/assets/salon/gallery2.png'),
+  require('@/assets/salon/gallery3.png'),
+  require('@/assets/salon/gallery4.png'),
+  require('@/assets/salon/gallery4.png'),
+];
 
 const serviceItems = [
-  { id: 'hair-1', label: 'Hair Care', image: serviceHairCare, selected: true },
-  { id: 'hair-2', label: 'Hair Care', image: serviceHairCare, selected: true },
-  { id: 'nail', label: 'Nail Bar', image: serviceNail },
-  { id: 'face', label: 'Face', image: serviceFace },
-  { id: 'treat', label: 'Treatments', image: serviceHairCare },
-  { id: 'spa', label: 'Massage & Spa', image: serviceFace },
-  { id: 'men', label: "Men's Grooming", image: serviceHairCare },
-  { id: 'mani', label: 'Manicure & Pedicure', image: serviceNail },
-  { id: 'wax', label: 'Waxing', image: serviceFace },
-  { id: 'thread', label: 'Bleaching & Threading', image: serviceFace },
-  { id: 'extension', label: 'Hair Extensions', image: serviceHairCare },
-  { id: 'bridal', label: 'Bridal & Makeup', image: serviceFace },
+  { id: 'haircare', label: 'Hair Care', image: require('@/assets/salon/svc-haircare.png') },
+  { id: 'nailbar', label: 'Nail Bar', image: require('@/assets/salon/svc-nailbar.png') },
+  { id: 'face', label: 'Face', image: require('@/assets/salon/svc-face.png') },
+  { id: 'treatments', label: 'Treatments', image: require('@/assets/salon/svc-treatments.png') },
+  { id: 'massage', label: 'Massage & Spa', image: require('@/assets/salon/svc-massage.png') },
+  { id: 'mens', label: "Men's Grooming", image: require('@/assets/salon/svc-mens.png') },
+  { id: 'manicure', label: 'Manicure & Pedicure', image: require('@/assets/salon/svc-manicure.png') },
+  { id: 'waxing', label: 'Waxing', image: require('@/assets/salon/svc-waxing.png') },
+  { id: 'bleaching', label: 'Bleaching & Threading', image: require('@/assets/salon/svc-bleaching.png') },
+  { id: 'extensions', label: 'Hair Extensions', image: require('@/assets/salon/svc-extensions.png') },
+  { id: 'bridal', label: 'Bridal & Makeup', image: require('@/assets/salon/svc-bridal.png') },
+  { id: 'haircare2', label: 'Hair Care', image: require('@/assets/salon/svc-haircare.png') },
 ];
 
 const facilities = ['Free Wifi', 'Steam Room', 'Car Parking', 'AC', 'Sanitized Tools'];
@@ -106,7 +98,7 @@ export function SalonDetailsScreen() {
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
         >
-          <SalonHero image={salon.heroImage || lumiereBeautyStudio.heroImage || salonThumb1} onBackPress={() => navigation.goBack()} />
+          <SalonHero onBackPress={() => navigation.goBack()} />
           <ThumbnailGallery />
           <SalonInfo salon={salon} />
           <OpeningPill />
@@ -150,7 +142,7 @@ export function SalonDetailsScreen() {
 
         <StickyBookButton
           onPress={() =>
-            navigation.navigate('BookingPlaceholder', { salonName: salon.name })
+            navigation.navigate('SalonServices', { salonName: salon.name })
           }
         />
       </View>
@@ -158,10 +150,10 @@ export function SalonDetailsScreen() {
   );
 }
 
-function SalonHero({ image, onBackPress }: { image: string; onBackPress: () => void }) {
+function SalonHero({ onBackPress }: { onBackPress: () => void }) {
   return (
     <View style={styles.heroWrap}>
-      <Image source={{ uri: image }} style={styles.heroImage} />
+      <Image source={heroImg} style={styles.heroImage} />
       <View style={styles.heroOverlay} />
       <Pressable onPress={onBackPress} style={styles.heroBackButton}>
         <Ionicons color={colors.white} name="arrow-back" size={22} />
@@ -177,12 +169,12 @@ function ThumbnailGallery() {
       horizontal
       showsHorizontalScrollIndicator={false}
     >
-      {thumbnails.map((thumb, index) => {
-        const isLast = index === thumbnails.length - 1;
+      {gallery.map((thumb, index) => {
+        const isLast = index === gallery.length - 1;
 
         return (
-          <View key={`${thumb}-${index}`} style={styles.thumbnailWrap}>
-            <Image source={{ uri: thumb }} style={styles.thumbnail} />
+          <View key={`thumb-${index}`} style={styles.thumbnailWrap}>
+            <Image source={thumb} style={styles.thumbnail} />
             {isLast ? (
               <View style={styles.thumbnailOverlay}>
                 <Text style={styles.thumbnailOverlayText}>+12 More</Text>
@@ -234,7 +226,7 @@ function OpeningPill() {
     <View style={styles.openingPill}>
       <View style={styles.openingLeft}>
         <View style={styles.openingCheck}>
-          <Ionicons color={colors.green} name="checkmark" size={15} />
+          <Ionicons color={colors.white} name="checkmark" size={15} />
         </View>
         <Text style={styles.openingText}>Open now | 10:00 AM - 09:00 PM</Text>
       </View>
@@ -298,13 +290,8 @@ function ServiceGrid() {
       <View style={styles.serviceGrid}>
         {serviceItems.map((item) => (
           <View key={item.id} style={styles.serviceItem}>
-            <View style={[styles.serviceTileWrap, item.selected && styles.serviceTileSelected]}>
-              <Image source={{ uri: item.image }} style={styles.serviceTileImage} />
-              {item.selected ? (
-                <View style={styles.serviceSelectedBadge}>
-                  <Ionicons color={colors.white} name="checkmark" size={12} />
-                </View>
-              ) : null}
+            <View style={styles.serviceTileWrap}>
+              <Image source={item.image} style={styles.serviceTileImage} />
             </View>
             <Text style={styles.serviceLabel}>{item.label}</Text>
           </View>
@@ -371,7 +358,7 @@ function ReviewCard() {
       <View style={styles.reviewHeader}>
         <View style={styles.reviewUser}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>E</Text>
+            <Image source={avatarEleanor} style={styles.avatarImage} />
           </View>
           <View>
             <Text style={styles.reviewName}>Eleanor Vance</Text>
@@ -398,8 +385,8 @@ function ReviewCard() {
       </Text>
 
       <View style={styles.reviewImagesRow}>
-        <Image source={{ uri: reviewImage1 }} style={styles.reviewImage} />
-        <Image source={{ uri: reviewImage2 }} style={styles.reviewImage} />
+        <Image source={review1} style={styles.reviewImage} />
+        <Image source={review2} style={styles.reviewImage} />
       </View>
     </View>
   );
@@ -435,7 +422,7 @@ function LocationCard() {
       </View>
 
       <View style={styles.mapWrap}>
-        <Image source={{ uri: mapPreview }} style={styles.mapImage} />
+        <Image source={mapImg} style={styles.mapImage} />
         <View style={styles.mapOverlay} />
         <Ionicons color={colors.gold} name="location" size={28} style={styles.mapMarker} />
       </View>
@@ -507,13 +494,13 @@ const styles = StyleSheet.create({
   thumbnailOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
-    backgroundColor: 'rgba(31, 21, 15, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
   },
   thumbnailOverlayText: {
     color: colors.white,
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
     textAlign: 'center',
   },
   sectionCard: {
@@ -530,13 +517,17 @@ const styles = StyleSheet.create({
   },
   salonName: {
     color: colors.text,
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
+    letterSpacing: -0.44,
+    lineHeight: 28.6,
   },
   salonCategory: {
     color: colors.muted,
-    fontSize: 15,
-    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 20,
+    marginTop: 2,
   },
   infoIcons: {
     flexDirection: 'row',
@@ -561,6 +552,7 @@ const styles = StyleSheet.create({
   },
   metaLineText: {
     color: colors.muted,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -594,8 +586,8 @@ const styles = StyleSheet.create({
   openingText: {
     color: colors.text,
     flex: 1,
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
   },
   actionRow: {
     flexDirection: 'row',
@@ -605,24 +597,26 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     alignItems: 'center',
-    backgroundColor: '#fceede',
-    borderRadius: 16,
+    backgroundColor: colors.action,
+    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1,
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
-    minHeight: 50,
+    minHeight: 48,
     paddingHorizontal: 12,
   },
   actionButtonText: {
-    color: colors.goldDark,
+    color: colors.text,
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    fontWeight: '700',
     marginLeft: 8,
   },
   tabsWrap: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -631,7 +625,7 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 12,
     flex: 1,
     paddingVertical: 10,
   },
@@ -639,9 +633,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold,
   },
   tabText: {
-    color: colors.text,
+    color: colors.muted,
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    fontWeight: '700',
   },
   tabTextActive: {
     color: colors.white,
@@ -652,15 +646,16 @@ const styles = StyleSheet.create({
   },
   blockTitle: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: '800',
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.2,
     marginBottom: 14,
   },
   sectionCapsTitle: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    color: colors.text,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    letterSpacing: 1.1,
     marginBottom: 14,
   },
   serviceGrid: {
@@ -699,9 +694,9 @@ const styles = StyleSheet.create({
   },
   serviceLabel: {
     color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 16,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 13.75,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -716,7 +711,8 @@ const styles = StyleSheet.create({
     width: '50%',
   },
   facilityText: {
-    color: colors.text,
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
     marginLeft: 8,
   },
@@ -724,7 +720,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -732,26 +728,28 @@ const styles = StyleSheet.create({
   },
   ratingValue: {
     color: colors.text,
-    fontSize: 26,
-    fontWeight: '800',
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.4,
   },
   ratingMeta: {
-    color: colors.muted,
-    fontSize: 13,
+    color: colors.subtle,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
     marginTop: 4,
   },
   writeReviewButton: {
     alignItems: 'center',
     backgroundColor: colors.gold,
-    borderRadius: 14,
+    borderRadius: 8,
     justifyContent: 'center',
     minHeight: 42,
     paddingHorizontal: 14,
   },
   writeReviewText: {
     color: colors.white,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
   reviewFilterRow: {
     flexDirection: 'row',
@@ -771,9 +769,9 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
   },
   reviewFilterText: {
-    color: colors.text,
+    color: colors.muted,
+    fontFamily: 'Inter_500Medium',
     fontSize: 12.5,
-    fontWeight: '600',
   },
   reviewFilterTextActive: {
     color: colors.goldDark,
@@ -797,32 +795,32 @@ const styles = StyleSheet.create({
   },
   avatarCircle: {
     alignItems: 'center',
-    backgroundColor: '#ecd8c3',
+    backgroundColor: colors.avatar,
     borderRadius: 22,
     height: 44,
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
     width: 44,
   },
-  avatarText: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
+  avatarImage: {
+    height: '100%',
+    width: '100%',
   },
   reviewName: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 16,
   },
   reviewTime: {
-    color: colors.muted,
-    fontSize: 12.5,
+    color: colors.subtle,
+    fontFamily: 'Montserrat_400Regular',
+    fontSize: 12,
     marginTop: 4,
   },
   reviewStars: {
-    color: colors.goldDark,
+    color: colors.gold,
     fontSize: 14,
-    fontWeight: '800',
   },
   reviewMetaRow: {
     flexDirection: 'row',
@@ -831,15 +829,15 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   verifiedBadge: {
-    backgroundColor: '#edf6ef',
+    backgroundColor: '#DCFCE7',
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   verifiedBadgeText: {
-    color: colors.green,
+    color: '#16A34A',
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
-    fontWeight: '700',
   },
   serviceReviewChip: {
     backgroundColor: colors.chip,
@@ -849,13 +847,14 @@ const styles = StyleSheet.create({
   },
   serviceReviewChipText: {
     color: colors.text,
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
-    fontWeight: '700',
   },
   reviewCopy: {
-    color: colors.text,
+    color: colors.muted,
+    fontFamily: 'Montserrat_400Regular',
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 22.75,
     marginTop: 14,
   },
   reviewImagesRow: {
@@ -869,9 +868,10 @@ const styles = StyleSheet.create({
     width: 86,
   },
   aboutCopy: {
-    color: colors.text,
-    fontSize: 14.5,
-    lineHeight: 24,
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    lineHeight: 26,
   },
   locationCard: {
     backgroundColor: colors.surfaceStrong,
@@ -886,13 +886,14 @@ const styles = StyleSheet.create({
   },
   locationBranch: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 16,
   },
   locationAddress: {
     color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20,
+    fontFamily: 'Montserrat_400Regular',
+    fontSize: 14,
+    lineHeight: 22.75,
     marginTop: 4,
   },
   mapWrap: {
@@ -908,7 +909,7 @@ const styles = StyleSheet.create({
   },
   mapOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(20, 18, 17, 0.28)',
+    backgroundColor: 'rgba(36, 27, 20, 0.28)',
   },
   mapMarker: {
     left: '50%',
@@ -918,8 +919,8 @@ const styles = StyleSheet.create({
     top: '50%',
   },
   bookButtonShell: {
-    backgroundColor: 'rgba(247, 240, 232, 0.98)',
-    borderTopColor: '#eadccf',
+    backgroundColor: 'rgba(255, 250, 245, 0.98)',
+    borderTopColor: colors.border,
     borderTopWidth: 1,
     bottom: 0,
     left: 0,
@@ -938,8 +939,8 @@ const styles = StyleSheet.create({
   },
   bookButtonText: {
     color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    fontWeight: '800',
     letterSpacing: 0.4,
   },
 });

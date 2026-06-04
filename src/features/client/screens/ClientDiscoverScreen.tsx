@@ -1,144 +1,167 @@
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { discoverSalons } from '@/features/client/data/salons';
-import type { ClientStackParamList, ClientTabParamList, SalonRouteData } from '@/navigation/navigation.types';
+import { auraWellness, luminaStudio } from '@/features/client/data/salons';
+import type {
+  ClientStackParamList,
+  ClientTabParamList,
+  SalonRouteData,
+} from '@/navigation/navigation.types';
+
+// Card images shared with the home "Top Rated" section (exported 1:1 from Figma).
+const topLumina = require('@/assets/home/top-lumina.png');
+const topAura = require('@/assets/home/top-aura.png');
 
 const colors = {
-  background: '#f7f0e8',
-  surface: '#fffaf4',
-  surfaceStrong: '#fffdf8',
-  text: '#2f221a',
-  muted: '#7d6d63',
-  subtle: '#a89182',
-  border: '#eadccf',
-  gold: '#d88a37',
-  goldDark: '#bf7021',
-  chip: '#eee4d9',
-  chipText: '#5f534b',
-  white: '#ffffff',
+  white: '#FFFFFF',
+  headerBorder: '#F3F4F6',
+  heading: '#221A11',
+  text: '#534433',
+  gold: '#F89E07',
+  orange: '#F97316',
+  bg: '#FFFAF5',
+  searchBorder: '#E7D7C9',
+  resultsMuted: '#6B7280',
+  mapBg: '#FFE9D6',
+  sectionHeading: '#655D52',
+  cardBg: '#FFF1E6',
+  cardBorder: 'rgba(231, 215, 201, 0.5)',
+  ratingBg: '#F0E0D1',
+  chipBg: '#EDE1D2',
+  chipUnisex: '#6B6357',
+  giftStripBg: '#221A11',
+  giftStripText: '#FFF8F4',
+  favBg: 'rgba(255, 255, 255, 0.8)',
+  dotInactive: 'rgba(255, 255, 255, 0.6)',
 };
 
-const categories = ['All', 'Hair', 'Nails', 'Skin', 'Spa'] as const;
+type DiscoverNavigation = BottomTabNavigationProp<ClientTabParamList>;
 
 export function ClientDiscoverScreen() {
-  const navigation = useNavigation<BottomTabNavigationProp<ClientTabParamList>>();
-  const parentNavigation =
-    navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const navigation = useNavigation<DiscoverNavigation>();
+  const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <View style={styles.screen}>
-        <DiscoverHeader onBackPress={() => navigation.navigate('Home')} />
+      <MainHeader
+        onBack={() => navigation.navigate('Home')}
+        onCart={() => navigation.navigate('Shopping')}
+      />
+      <SearchSection />
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <CategoryChips />
-          <ResultSummary />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.resultsHeader}>
+          <Text style={styles.resultsText}>4 salons found</Text>
+          <Pressable style={styles.mapButton}>
+            <Ionicons color={colors.orange} name="navigate-outline" size={13} />
+            <Text style={styles.mapButtonText}>Map View</Text>
+          </Pressable>
+        </View>
 
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>SALONS NEAR YOU</Text>
-
           <View style={styles.list}>
-            {discoverSalons.map((salon) => (
-              <SalonCard
-                key={salon.id}
-                onPress={() => parentNavigation?.navigate('SalonDetails', { salon })}
-                salon={salon}
-              />
-            ))}
+            <SalonCard
+              chips={['UNISEX', 'HAIR & SPA']}
+              image={topLumina}
+              location="Downtown Ave • 1.2 km"
+              name="Lumina Studio"
+              offer="40% OFF"
+              onPress={() => openSalon(luminaStudio)}
+              rating="5.0"
+            />
+            <SalonCard
+              chips={['UNISEX', 'MASSAGE']}
+              giftStrip
+              image={topAura}
+              location="Westside District • 2.5 km"
+              name="Aura Wellness"
+              offer="GIFT CARD DEAL"
+              onPress={() => openSalon(auraWellness)}
+              rating="4.9"
+            />
           </View>
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-function DiscoverHeader({ onBackPress }: { onBackPress: () => void }) {
+function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void }) {
   return (
-    <View style={styles.header}>
-      <Pressable onPress={onBackPress} style={styles.circleButton}>
-        <Ionicons color={colors.text} name="arrow-back" size={18} />
-      </Pressable>
+    <View style={styles.mainHeader}>
+      <View style={styles.mainHeaderLeft}>
+        <Pressable onPress={onBack}>
+          <Ionicons color={colors.heading} name="arrow-back" size={24} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Services</Text>
+      </View>
 
-      <View style={styles.searchBar}>
-        <Ionicons color={colors.subtle} name="search-outline" size={18} />
+      <Pressable onPress={onCart} style={styles.cartWrap}>
+        <Ionicons color={colors.heading} name="cart-outline" size={24} />
+        <View style={styles.cartBadge}>
+          <Text style={styles.cartBadgeText}>4</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+function SearchSection() {
+  return (
+    <View style={styles.searchSection}>
+      <View style={styles.searchInputWrap}>
+        <Ionicons color={colors.text} name="search-outline" size={18} />
         <TextInput
           placeholder="Search salons, services..."
-          placeholderTextColor={colors.subtle}
+          placeholderTextColor={colors.text}
           style={styles.searchInput}
         />
       </View>
-
       <Pressable style={styles.filterButton}>
-        <Ionicons color={colors.white} name="options-outline" size={18} />
+        <Ionicons color={colors.white} name="options-outline" size={16} />
       </Pressable>
     </View>
   );
 }
 
-function CategoryChips() {
-  return (
-    <ScrollView
-      contentContainerStyle={styles.categoryRow}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-    >
-      {categories.map((category) => {
-        const isActive = category === 'All';
-
-        return (
-          <View key={category} style={[styles.categoryChip, isActive && styles.categoryChipActive]}>
-            <Text
-              style={[
-                styles.categoryChipText,
-                isActive && styles.categoryChipTextActive,
-              ]}
-            >
-              {category}
-            </Text>
-          </View>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-function ResultSummary() {
-  return (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryText}>4 salons found</Text>
-
-      <Pressable style={styles.mapViewButton}>
-        <Ionicons color={colors.goldDark} name="location-outline" size={15} />
-        <Text style={styles.mapViewButtonText}>Map View</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function SalonCard({ onPress, salon }: { onPress: () => void; salon: SalonRouteData }) {
+function SalonCard({
+  chips,
+  giftStrip = false,
+  image,
+  location,
+  name,
+  offer,
+  onPress,
+  rating,
+}: {
+  chips: string[];
+  giftStrip?: boolean;
+  image: number;
+  location: string;
+  name: string;
+  offer: string;
+  onPress: () => void;
+  rating: string;
+}) {
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <View style={styles.imageWrap}>
-        <Image source={{ uri: salon.heroImage }} style={styles.cardImage} />
+        <Image source={image} style={styles.cardImage} />
 
-        <View style={styles.offerBadge}>
-          <Text style={styles.offerBadgeText}>{salon.badge}</Text>
+        <View style={[styles.offerStrip, giftStrip && styles.offerStripGift]}>
+          <Text style={[styles.offerStripText, giftStrip && styles.offerStripTextGift]}>
+            {offer}
+          </Text>
         </View>
 
-        <Pressable style={styles.cartButton}>
-          <Ionicons color={colors.goldDark} name="bag-handle-outline" size={17} />
+        <Pressable style={styles.favButton}>
+          <Ionicons color={colors.heading} name="heart-outline" size={17} />
         </Pressable>
 
         <View style={styles.imageDots}>
@@ -150,21 +173,22 @@ function SalonCard({ onPress, salon }: { onPress: () => void; salon: SalonRouteD
 
       <View style={styles.cardContent}>
         <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle}>{salon.name}</Text>
-          <Text style={styles.ratingText}>★ {salon.rating}</Text>
+          <Text style={styles.cardName}>{name}</Text>
+          <View style={styles.ratingBadge}>
+            <Ionicons color={colors.gold} name="star" size={11} />
+            <Text style={styles.ratingText}>{rating}</Text>
+          </View>
         </View>
 
         <View style={styles.locationRow}>
-          <Ionicons color={colors.muted} name="location-outline" size={14} />
-          <Text style={styles.locationText}>
-            {salon.location} • {salon.distance}
-          </Text>
+          <Ionicons color={colors.text} name="location-outline" size={14} />
+          <Text style={styles.locationText}>{location}</Text>
         </View>
 
-        <View style={styles.cardChipRow}>
-          {salon.chips?.map((chip) => (
-            <View key={chip} style={styles.cardChip}>
-              <Text style={styles.cardChipText}>{chip}</Text>
+        <View style={styles.chipRow}>
+          {chips.map((chip, index) => (
+            <View key={chip} style={styles.chip}>
+              <Text style={[styles.chipText, index === 0 && styles.chipTextUnisex]}>{chip}</Text>
             </View>
           ))}
         </View>
@@ -175,162 +199,196 @@ function SalonCard({ onPress, salon }: { onPress: () => void; salon: SalonRouteD
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     flex: 1,
   },
-  screen: {
-    backgroundColor: colors.background,
-    flex: 1,
-  },
-  header: {
+  mainHeader: {
     alignItems: 'center',
+    backgroundColor: colors.white,
+    borderBottomColor: colors.headerBorder,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    height: 72,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  mainHeaderLeft: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 16,
+  },
+  headerTitle: {
+    color: colors.heading,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 20,
+  },
+  cartWrap: {
+    height: 24,
+    width: 24,
+  },
+  cartBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.gold,
+    borderColor: colors.white,
+    borderRadius: 9999,
+    borderWidth: 2,
+    height: 20,
+    justifyContent: 'center',
+    minWidth: 20,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: -8,
+    top: -8,
+  },
+  cartBadgeText: {
+    color: colors.white,
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 10,
+  },
+  searchSection: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 2,
+    flexDirection: 'row',
+    gap: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    shadowColor: 'rgba(0, 0, 0, 0.05)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 2,
+  },
+  searchInputWrap: {
+    alignItems: 'center',
+    borderColor: colors.searchBorder,
+    borderRadius: 9999,
+    borderWidth: 1,
+    flex: 1,
     flexDirection: 'row',
     gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  circleButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 22,
-    borderWidth: 1,
     height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  searchBar: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceStrong,
-    borderColor: colors.border,
-    borderRadius: 22,
-    borderWidth: 1,
-    flex: 1,
-    flexDirection: 'row',
-    height: 44,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   searchInput: {
     color: colors.text,
     flex: 1,
-    fontSize: 14,
-    marginLeft: 8,
+    fontFamily: 'Montserrat_500Medium',
+    fontSize: 16,
   },
   filterButton: {
     alignItems: 'center',
-    backgroundColor: colors.gold,
-    borderRadius: 22,
-    height: 44,
+    backgroundColor: colors.orange,
+    borderRadius: 9999,
+    elevation: 4,
+    height: 40,
     justifyContent: 'center',
-    width: 44,
+    shadowColor: 'rgba(249, 115, 22, 0.25)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    width: 40,
   },
   content: {
-    paddingBottom: 112,
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingBottom: 120,
+    paddingTop: 20,
   },
-  categoryRow: {
-    gap: 10,
-    paddingRight: 12,
-  },
-  categoryChip: {
-    backgroundColor: colors.chip,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  categoryChipActive: {
-    backgroundColor: colors.gold,
-  },
-  categoryChipText: {
-    color: colors.chipText,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  categoryChipTextActive: {
-    color: colors.white,
-  },
-  summaryRow: {
+  resultsHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 18,
-    marginTop: 18,
+    paddingHorizontal: 20,
   },
-  summaryText: {
-    color: colors.text,
+  resultsText: {
+    color: colors.resultsMuted,
+    fontFamily: 'Montserrat_500Medium',
     fontSize: 14,
-    fontWeight: '600',
   },
-  mapViewButton: {
+  mapButton: {
     alignItems: 'center',
-    backgroundColor: '#fde9d6',
-    borderRadius: 16,
+    backgroundColor: colors.mapBg,
+    borderRadius: 9999,
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 6,
   },
-  mapViewButtonText: {
-    color: colors.goldDark,
-    fontSize: 12.5,
-    fontWeight: '700',
+  mapButtonText: {
+    color: colors.orange,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 12,
+  },
+  section: {
+    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 15,
   },
   sectionTitle: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-    marginBottom: 14,
+    color: colors.sectionHeading,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    letterSpacing: 1.1,
   },
   list: {
     gap: 16,
   },
   card: {
-    backgroundColor: colors.surfaceStrong,
-    borderColor: colors.border,
-    borderRadius: 18,
+    backgroundColor: colors.cardBg,
+    borderColor: colors.cardBorder,
+    borderRadius: 8,
     borderWidth: 1,
-    elevation: 6,
+    elevation: 3,
     overflow: 'hidden',
-    shadowColor: '#c0a995',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowColor: 'rgba(44, 44, 44, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
   },
   imageWrap: {
-    height: 166,
+    height: 150,
     position: 'relative',
   },
   cardImage: {
     height: '100%',
     width: '100%',
   },
-  offerBadge: {
-    backgroundColor: colors.goldDark,
-    borderBottomRightRadius: 14,
-    borderTopLeftRadius: 18,
+  offerStrip: {
+    backgroundColor: colors.gold,
+    borderBottomRightRadius: 4,
     left: 0,
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     paddingVertical: 8,
     position: 'absolute',
-    top: 0,
+    top: 16,
   },
-  offerBadgeText: {
+  offerStripGift: {
+    backgroundColor: colors.giftStripBg,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  offerStripText: {
     color: colors.white,
-    fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'Inter_800ExtraBold',
+    fontSize: 13,
   },
-  cartButton: {
+  offerStripTextGift: {
+    color: colors.giftStripText,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+  },
+  favButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 250, 244, 0.95)',
-    borderRadius: 18,
-    height: 36,
+    backgroundColor: colors.favBg,
+    borderRadius: 12,
+    height: 32,
     justifyContent: 'center',
     position: 'absolute',
-    right: 14,
-    top: 14,
-    width: 36,
+    right: 12,
+    top: 12,
+    width: 32,
   },
   imageDots: {
     alignItems: 'center',
@@ -343,35 +401,45 @@ const styles = StyleSheet.create({
     right: 0,
   },
   imageDot: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: colors.dotInactive,
     borderRadius: 4,
-    height: 7,
-    width: 7,
+    height: 6,
+    width: 6,
   },
   imageDotActive: {
     backgroundColor: colors.white,
     width: 18,
   },
   cardContent: {
+    gap: 8,
     padding: 16,
   },
   cardTitleRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
   },
-  cardTitle: {
-    color: colors.text,
+  cardName: {
+    color: colors.heading,
     flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.2,
     paddingRight: 10,
   },
+  ratingBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.ratingBg,
+    borderRadius: 2,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   ratingText: {
-    color: colors.goldDark,
+    color: colors.heading,
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    fontWeight: '700',
   },
   locationRow: {
     alignItems: 'center',
@@ -379,24 +447,28 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   locationText: {
-    color: colors.muted,
-    fontSize: 13,
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
   },
-  cardChipRow: {
+  chipRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 14,
+    marginTop: 4,
   },
-  cardChip: {
-    backgroundColor: '#f2e5d8',
-    borderRadius: 16,
+  chip: {
+    backgroundColor: colors.chipBg,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  cardChipText: {
+  chipText: {
     color: colors.text,
-    fontSize: 11.5,
-    fontWeight: '700',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  chipTextUnisex: {
+    color: colors.chipUnisex,
   },
 });

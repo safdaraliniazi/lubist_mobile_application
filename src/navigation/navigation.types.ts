@@ -44,8 +44,17 @@ export type ClientStackParamList = {
   SalonDetails: {
     salon?: SalonRouteData;
   };
-  BookingPlaceholder: {
+  SalonServices: {
     salonName?: string;
+  };
+  SelectTime: {
+    serviceName?: string;
+  };
+  Checkout: {
+    serviceName?: string;
+  };
+  BookingConfirmed: {
+    serviceName?: string;
   };
 };
 

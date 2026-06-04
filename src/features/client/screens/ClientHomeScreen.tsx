@@ -1,23 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   auraWellness,
-  lumiereBeautyStudio,
   luminaStudio,
-  maisonGlowAtelier,
+  lumiereBeautyStudio,
+  theGlowRoom,
 } from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
@@ -25,131 +18,115 @@ import type {
   SalonRouteData,
 } from '@/navigation/navigation.types';
 
+// Assets exported 1:1 from Figma ("HOmescreen").
+const avatar = require('@/assets/home/avatar.png');
+const hero = require('@/assets/home/hero.png');
+const nearbyLumiere = require('@/assets/home/nearby-lumiere.png');
+const nearbyGlow = require('@/assets/home/nearby-glow.png');
+const serviceImage = require('@/assets/home/service.png');
+const brandHaircare = require('@/assets/home/brand-haircare.png');
+const brandSkincare = require('@/assets/home/brand-skincare.png');
+const brandMakeup = require('@/assets/home/brand-makeup.png');
+const topLumina = require('@/assets/home/top-lumina.png');
+const topAura = require('@/assets/home/top-aura.png');
+
 const colors = {
-  background: '#f7f0e8',
-  surface: '#fffaf4',
-  surfaceStrong: '#fffdf8',
-  text: '#2f221a',
-  muted: '#7d6d63',
-  subtle: '#aa9789',
-  border: '#eadccf',
-  gold: '#d88a37',
-  goldDark: '#bf7021',
-  chip: '#f4e7d8',
-  offer: '#f7e4cf',
-  white: '#ffffff',
+  bg: '#FFFAF5',
+  white: '#FFFFFF',
+  gold: '#F89E07',
+  heading: '#221A11',
+  text: '#534433',
+  muted: '#78716C',
+  muted2: '#867461',
+  topHeading: '#655D52',
+  serviceSub: '#7A7A7A',
+  apptIcon: '#7B5548',
+  border: '#E7D7C9',
+  tan: '#F0E0D1',
+  cardCream: '#FFF6EC',
+  cardCream2: '#FFF1E6',
+  offWhite: '#FFF8F4',
+  apptBorder: '#EDBCAA',
+  offerDark: '#2C2C2C',
+  offerIconBg: '#FDEDDF',
+  placeholder: 'rgba(83, 68, 51, 0.5)',
+  pill: 'rgba(240, 224, 209, 0.5)',
+  pillBorder: 'rgba(217, 195, 173, 0.3)',
+  badgeDark: 'rgba(0, 0, 0, 0.3)',
+  badgeBorder: 'rgba(255, 255, 255, 0.1)',
+  onImage: 'rgba(255, 255, 255, 0.9)',
+  onImageDivider: 'rgba(255, 255, 255, 0.3)',
+  chipBg: '#EDE1D2',
+  chipUnisex: '#6B6357',
+  offerBorder: 'rgba(248, 158, 7, 0.2)',
+  goldBorder: 'rgba(230, 194, 122, 0.8)',
+  dotInactive: '#F0E0D1',
 };
 
-const salonBanner =
-  'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1400&q=80';
-const profileAvatar =
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80';
-const productOlaplex =
-  'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80';
-const productKerastase =
-  'https://images.unsplash.com/photo-1596704017254-9f0a0b4f6a87?auto=format&fit=crop&w=800&q=80';
-const productLoreal =
-  'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80';
-const productMore =
-  'https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&w=800&q=80';
-const serviceStylist =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80';
-
 const offers = [
-  {
-    id: 'offer-1',
-    title: 'Flat 10% OFF',
-    subtitle: 'On all services with online payment.',
-  },
-  {
-    id: 'offer-2',
-    title: 'Pamper Day Deal',
-    subtitle: 'Save on spa rituals and hair care bundles.',
-  },
+  { id: 'o1', title: 'Flat 10% OFF', subtitle: 'On all services with online payment.' },
+  { id: 'o2', title: 'Flat 10% OFF', subtitle: 'On all services with online payment.' },
 ];
 
-const essentials = [
-  { id: 'olaplex', label: 'Olaplex', image: productOlaplex },
-  { id: 'kerastase', label: 'Kerastase', image: productKerastase },
-  { id: 'loreal', label: "L'Oreal", image: productLoreal },
-  { id: 'more', label: 'More', image: productMore },
+const services = [
+  { id: 's1', title: 'Salons', subtitle: 'Grooming' },
+  { id: 's2', title: 'Dermatologists', subtitle: 'Grooming' },
+  { id: 's3', title: 'Spa & Wellness', subtitle: 'Grooming' },
+  { id: 's4', title: 'Salons', subtitle: 'Grooming' },
 ];
 
-const nearbySalons = [
-  {
-    ...lumiereBeautyStudio,
-    heroImage: lumiereBeautyStudio.heroImage,
-    timing: 'Avail now',
-  },
-  {
-    ...maisonGlowAtelier,
-    heroImage: maisonGlowAtelier.heroImage,
-    timing: 'Opens 10 AM',
-  },
+type Essential = {
+  id: string;
+  label: string;
+  image?: number;
+  icon?: keyof typeof Ionicons.glyphMap;
+};
+
+const essentials: Essential[] = [
+  { id: 'e1', label: 'Haircare', image: brandHaircare },
+  { id: 'e2', label: 'Skincare', image: brandSkincare },
+  { id: 'e3', label: 'Makeup', image: brandMakeup },
+  { id: 'e4', label: 'Bath&Body', icon: 'ellipsis-horizontal' },
 ];
 
-const serviceCards = [
-  { id: 'svc-1', title: 'Salons', subtitle: 'Grooming' },
-  { id: 'svc-2', title: 'Dermatologists', subtitle: 'Skincare' },
-  { id: 'svc-3', title: 'Spa & Wellness', subtitle: 'Relaxation' },
-  { id: 'svc-4', title: 'Salons', subtitle: 'Styling' },
-];
-
-const topRatedSalons = [
-  luminaStudio,
-  auraWellness,
-];
-
-const nearbyCategories = ['Hair', 'Nails', 'Skin', 'Brows'];
+type HomeNavigation = BottomTabNavigationProp<ClientTabParamList>;
 
 export function ClientHomeScreen() {
-  const navigation = useNavigation<BottomTabNavigationProp<ClientTabParamList>>();
-  const parentNavigation = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const navigation = useNavigation<HomeNavigation>();
+  const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <View style={styles.screen}>
+      <Header />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <HeroBanner />
+        <SearchBar />
+        <AppointmentsCard />
+
+        <SectionTitle text="CURRENT OFFERS" />
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.offersRow}
+          horizontal
+          showsHorizontalScrollIndicator={false}
         >
-          <Header />
-          <HeroBanner />
-          <SearchBar />
-          <AppointmentCard />
-
-          <SectionHeader title="CURRENT OFFERS" />
-          <ScrollView
-            contentContainerStyle={styles.horizontalSectionContent}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-          >
-            {offers.map((offer) => (
-              <OfferCard key={offer.id} title={offer.title} subtitle={offer.subtitle} />
-            ))}
-          </ScrollView>
-          <PaginationDots count={3} activeIndex={0} />
-
-          <EssentialsSection />
-
-          <NearYouSection
-            onSalonPress={(salon) => parentNavigation?.navigate('SalonDetails', { salon })}
-          />
-
-          <ServicesSection />
-
-          <SectionHeader title="TOP RATED SALONS" />
-          <View style={styles.topRatedList}>
-            {topRatedSalons.map((salon) => (
-              <TopRatedSalonCard
-                key={salon.id}
-                onPress={() => parentNavigation?.navigate('SalonDetails', { salon })}
-                salon={salon}
-              />
-            ))}
-          </View>
+          {offers.map((offer) => (
+            <OfferCard key={offer.id} subtitle={offer.subtitle} title={offer.title} />
+          ))}
         </ScrollView>
-      </View>
+        <PaginationDots activeIndex={0} count={3} />
+
+        <NearYouSection onOpen={openSalon} />
+
+        <ServicesForYou />
+
+        <BeautyEssentials />
+
+        <TopRatedSalons onOpen={openSalon} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -157,21 +134,21 @@ export function ClientHomeScreen() {
 function Header() {
   return (
     <View style={styles.header}>
-      <View style={styles.headerLocation}>
+      <View style={styles.headerLeft}>
         <View style={styles.locationRow}>
           <Ionicons color={colors.gold} name="location-sharp" size={18} />
           <Text style={styles.homeTitle}>Home</Text>
-          <Ionicons color={colors.goldDark} name="chevron-down" size={16} />
+          <Ionicons color={colors.muted} name="chevron-down" size={16} />
         </View>
-        <Text style={styles.addressText}>123 Beauty Lane, Manhattan, NY</Text>
+        <Text style={styles.addressText}>123 Beauty Lane, Manhattan,{'\n'}NY</Text>
       </View>
 
       <View style={styles.headerActions}>
-        <Pressable style={styles.offerPill}>
-          <Ionicons color={colors.goldDark} name="pricetag-outline" size={14} />
-          <Text style={styles.offerPillText}>Offers</Text>
+        <Pressable style={styles.offersButton}>
+          <Ionicons color={colors.gold} name="pricetag-outline" size={14} />
+          <Text style={styles.offersButtonText}>Offers</Text>
         </Pressable>
-        <Image source={{ uri: profileAvatar }} style={styles.avatar} />
+        <Image source={avatar} style={styles.avatar} />
       </View>
     </View>
   );
@@ -180,13 +157,7 @@ function Header() {
 function HeroBanner() {
   return (
     <View style={styles.heroBanner}>
-      <Image source={{ uri: salonBanner }} style={styles.heroBannerImage} />
-      <View style={styles.heroBannerOverlay} />
-      <View style={styles.heroBannerContent}>
-        <Text style={styles.heroEyebrow}>Salon Services</Text>
-        <Text style={styles.heroTitle}>At your Doorstep</Text>
-        <Text style={styles.heroSubtitle}>Glow anytime, Anywhere</Text>
-      </View>
+      <Image source={hero} style={styles.heroImage} />
     </View>
   );
 }
@@ -194,190 +165,280 @@ function HeroBanner() {
 function SearchBar() {
   return (
     <View style={styles.searchBar}>
-      <Ionicons color={colors.subtle} name="search-outline" size={20} />
+      <Ionicons color={colors.placeholder} name="search-outline" size={20} />
       <TextInput
         placeholder="Search for a place or service"
-        placeholderTextColor={colors.subtle}
+        placeholderTextColor={colors.placeholder}
         style={styles.searchInput}
       />
     </View>
   );
 }
 
-function AppointmentCard() {
+function AppointmentsCard() {
   return (
-    <Pressable style={styles.appointmentCard}>
-      <View style={styles.appointmentCardLeft}>
-        <View style={styles.appointmentIconShell}>
-          <Ionicons color={colors.goldDark} name="calendar-outline" size={18} />
+    <Pressable style={styles.appointmentsCard}>
+      <View style={styles.appointmentsLeft}>
+        <View style={styles.appointmentsIcon}>
+          <Ionicons color={colors.apptIcon} name="calendar-outline" size={18} />
         </View>
-        <Text style={styles.appointmentText}>My Appointments</Text>
+        <Text style={styles.appointmentsText}>My Appointments</Text>
       </View>
-      <Ionicons color={colors.goldDark} name="chevron-forward" size={18} />
+      <Ionicons color={colors.muted2} name="chevron-forward" size={18} />
     </Pressable>
   );
 }
 
 function OfferCard({ subtitle, title }: { subtitle: string; title: string }) {
   return (
-    <View style={styles.offerCard}>
-      <View style={styles.offerTag}>
-        <Ionicons color={colors.goldDark} name="pricetag" size={16} />
+    <LinearGradient
+      colors={[colors.cardCream, '#FCEBDC']}
+      end={{ x: 0.2, y: 1 }}
+      start={{ x: 0, y: 0 }}
+      style={styles.offerCard}
+    >
+      <View style={styles.offerTopRow}>
+        <View style={styles.offerIcon}>
+          <Ionicons color={colors.gold} name="pricetag" size={14} />
+        </View>
+        <Text style={styles.offerTitle}>{title}</Text>
       </View>
-      <Text style={styles.offerCardTitle}>{title}</Text>
-      <Text style={styles.offerCardSubtitle}>{subtitle}</Text>
-    </View>
+      <Text style={styles.offerSubtitle}>{subtitle}</Text>
+    </LinearGradient>
   );
 }
 
-function EssentialsSection() {
+function NearYouSection({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
   return (
-    <View style={styles.sectionBlock}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>BEAUTY ESSENTIALS</Text>
-        <Ionicons color={colors.goldDark} name="arrow-forward" size={16} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.essentialsRow}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        {essentials.map((item) => (
-          <View key={item.id} style={styles.essentialItem}>
-            <Image source={{ uri: item.image }} style={styles.essentialImage} />
-            <Text style={styles.essentialLabel}>{item.label}</Text>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-function NearYouSection({ onSalonPress }: { onSalonPress: (salon: SalonRouteData) => void }) {
-  return (
-    <View style={styles.sectionBlock}>
+    <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>NEAR YOU</Text>
-        <Text style={styles.seeAllText}>SEE ALL ›</Text>
+        <Pressable style={styles.seeAll}>
+          <Text style={styles.seeAllText}>SEE ALL </Text>
+          <Ionicons color={colors.gold} name="chevron-forward" size={12} />
+        </Pressable>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.horizontalSectionContent}
+        contentContainerStyle={styles.nearYouRow}
         horizontal
         showsHorizontalScrollIndicator={false}
       >
-        {nearbySalons.map((salon) => (
-          <NearYouCard key={salon.id} onPress={() => onSalonPress(salon)} salon={salon} />
-        ))}
+        <NearYouCard
+          image={nearbyLumiere}
+          location="Dubai Marina"
+          name="Lumière Beauty Studio"
+          onPress={() => onOpen(lumiereBeautyStudio)}
+          pills={['Hair', 'Nails']}
+          rating="4.9"
+          timing="Avail now"
+        />
+        <NearYouCard
+          image={nearbyGlow}
+          location="JBR"
+          name="The Glow Room"
+          onPress={() => onOpen(theGlowRoom)}
+          pills={['Skin', 'Brows']}
+          rating="4.8"
+          timing="30 min wait"
+        />
       </ScrollView>
 
-      <View style={styles.chipRow}>
-        {nearbyCategories.map((category) => (
-          <View key={category} style={styles.categoryChip}>
-            <Text style={styles.categoryChipText}>{category}</Text>
-          </View>
-        ))}
-      </View>
-
-      <PaginationDots count={3} activeIndex={0} />
+      <PaginationDots activeIndex={0} count={3} />
     </View>
   );
 }
 
 function NearYouCard({
+  image,
+  location,
+  name,
   onPress,
-  salon,
+  pills,
+  rating,
+  timing,
 }: {
+  image: number;
+  location: string;
+  name: string;
   onPress: () => void;
-  salon: SalonRouteData & { timing: string };
+  pills: string[];
+  rating: string;
+  timing: string;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.nearbyCard}>
-      <Image source={{ uri: salon.heroImage }} style={styles.nearbyImage} />
-      <View style={styles.nearbyBadgeLeft}>
-        <Ionicons color={colors.goldDark} name="sparkles" size={13} />
-      </View>
-      <View style={styles.nearbyBadgeRight}>
-        <Text style={styles.nearbyBadgeRightText}>★ {salon.rating}</Text>
+    <Pressable onPress={onPress} style={styles.nearYouCard}>
+      <View style={styles.nearYouImageWrap}>
+        <Image source={image} style={styles.nearYouImage} />
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
+          locations={[0, 0.5, 1]}
+          style={styles.nearYouGradient}
+        />
+
+        <View style={styles.nearYouBadges}>
+          <View style={styles.nearYouHeart}>
+            <Ionicons color={colors.white} name="heart-outline" size={14} />
+          </View>
+          <View style={styles.nearYouRating}>
+            <Ionicons color={colors.white} name="star" size={11} />
+            <Text style={styles.nearYouRatingText}>{rating}</Text>
+          </View>
+        </View>
+
+        <View style={styles.nearYouContent}>
+          <Text style={styles.nearYouName}>{name}</Text>
+          <View style={styles.nearYouMetaRow}>
+            <View style={styles.nearYouMeta}>
+              <Ionicons color={colors.onImage} name="location-outline" size={12} />
+              <Text style={styles.nearYouMetaText}>{location}</Text>
+            </View>
+            <View style={styles.nearYouMetaDivider} />
+            <View style={styles.nearYouMeta}>
+              <Ionicons color={colors.onImage} name="time-outline" size={12} />
+              <Text style={styles.nearYouMetaText}>{timing}</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
-      <View style={styles.nearbyContent}>
-        <Text style={styles.nearbyTitle}>{salon.name}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons color={colors.muted} name="location-outline" size={14} />
-          <Text style={styles.metaText}>{salon.location}</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Ionicons color={colors.muted} name="time-outline" size={14} />
-          <Text style={styles.metaText}>{salon.timing}</Text>
-        </View>
+      <View style={styles.servicePills}>
+        {pills.map((pill) => (
+          <View key={pill} style={styles.servicePill}>
+            <Text style={styles.servicePillText}>{pill}</Text>
+          </View>
+        ))}
       </View>
     </Pressable>
   );
 }
 
-function ServicesSection() {
+function ServicesForYou() {
   return (
-    <View style={styles.sectionBlock}>
-      <View style={styles.centeredDividerTitle}>
+    <View style={styles.section}>
+      <View style={styles.dividerHeading}>
         <View style={styles.dividerLine} />
-        <Text style={styles.sectionTitle}>SERVICES FOR YOU</Text>
+        <Text style={styles.dividerTitle}>SERVICES FOR YOU</Text>
         <View style={styles.dividerLine} />
       </View>
 
       <View style={styles.servicesGrid}>
-        {serviceCards.map((service) => (
-          <ServiceCard key={service.id} title={service.title} subtitle={service.subtitle} />
+        {services.map((service) => (
+          <View key={service.id} style={styles.serviceCard}>
+            <View style={styles.serviceText}>
+              <Text style={styles.serviceTitle}>{service.title}</Text>
+              <Text style={styles.serviceSubtitle}>{service.subtitle}</Text>
+            </View>
+            <Image source={serviceImage} style={styles.serviceThumb} />
+          </View>
         ))}
       </View>
     </View>
   );
 }
 
-function ServiceCard({ subtitle, title }: { subtitle: string; title: string }) {
+function BeautyEssentials() {
   return (
-    <View style={styles.serviceCard}>
-      <View style={styles.serviceAccent} />
-      <View style={styles.serviceContent}>
-        <View style={styles.serviceTextWrap}>
-          <Text style={styles.serviceTitle}>{title}</Text>
-          <Text style={styles.serviceSubtitle}>{subtitle}</Text>
-        </View>
-        <Image source={{ uri: serviceStylist }} style={styles.serviceImage} />
+    <View style={styles.section}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>BEAUTY ESSENTIALS</Text>
+        <Ionicons color={colors.text} name="arrow-forward" size={16} />
+      </View>
+
+      <View style={styles.essentialsRow}>
+        {essentials.map((item) => (
+          <View key={item.id} style={styles.essentialItem}>
+            <View style={styles.essentialCircle}>
+              {item.image ? (
+                <Image source={item.image} style={styles.essentialImage} />
+              ) : item.icon ? (
+                <Ionicons color={colors.muted2} name={item.icon} size={24} />
+              ) : null}
+            </View>
+            <Text style={styles.essentialLabel}>{item.label}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
 }
 
-function TopRatedSalonCard({ onPress, salon }: { onPress: () => void; salon: SalonRouteData }) {
+function TopRatedSalons({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, styles.topRatedHeading]}>TOP RATED SALONS</Text>
+
+      <View style={styles.topRatedList}>
+        <TopRatedCard
+          chips={['UNISEX', 'HAIR & SPA']}
+          image={topLumina}
+          location="Downtown Ave • 1.2 km"
+          name="Lumina Studio"
+          offer="40% OFF"
+          onPress={() => onOpen(luminaStudio)}
+          rating="5.0"
+        />
+        <TopRatedCard
+          chips={['UNISEX', 'MASSAGE']}
+          image={topAura}
+          location="Westside District • 2.5 km"
+          name="Aura Wellness"
+          offer="GIFT CARD DEAL"
+          onPress={() => onOpen(auraWellness)}
+          rating="4.9"
+        />
+      </View>
+    </View>
+  );
+}
+
+function TopRatedCard({
+  chips,
+  image,
+  location,
+  name,
+  offer,
+  onPress,
+  rating,
+}: {
+  chips: string[];
+  image: number;
+  location: string;
+  name: string;
+  offer: string;
+  onPress: () => void;
+  rating: string;
+}) {
   return (
     <Pressable onPress={onPress} style={styles.topRatedCard}>
       <View style={styles.topRatedImageWrap}>
-        <Image source={{ uri: salon.heroImage }} style={styles.topRatedImage} />
-        <View style={styles.topRatedOfferBadge}>
-          <Text style={styles.topRatedOfferText}>{salon.badge}</Text>
+        <Image source={image} style={styles.topRatedImage} />
+        <View style={styles.topRatedOffer}>
+          <Text style={styles.topRatedOfferText}>{offer}</Text>
         </View>
-        <Pressable style={styles.topRatedCartButton}>
-          <Ionicons color={colors.goldDark} name="bag-handle-outline" size={18} />
+        <Pressable style={styles.topRatedFav}>
+          <Ionicons color={colors.heading} name="heart-outline" size={18} />
         </Pressable>
       </View>
 
       <View style={styles.topRatedContent}>
         <View style={styles.topRatedTitleRow}>
-          <Text style={styles.topRatedTitle}>{salon.name}</Text>
-          <Text style={styles.topRatedRating}>★ {salon.rating}</Text>
+          <Text style={styles.topRatedName}>{name}</Text>
+          <View style={styles.topRatedRating}>
+            <Ionicons color={colors.gold} name="star" size={12} />
+            <Text style={styles.topRatedRatingText}>{rating}</Text>
+          </View>
         </View>
-        <View style={styles.metaRow}>
-          <Ionicons color={colors.muted} name="location-outline" size={14} />
-          <Text style={styles.metaText}>
-            {salon.location} • {salon.distance}
-          </Text>
+        <View style={styles.topRatedMeta}>
+          <Ionicons color={colors.text} name="location-outline" size={14} />
+          <Text style={styles.topRatedMetaText}>{location}</Text>
         </View>
-        <View style={styles.topRatedChipRow}>
-          {salon.chips?.map((chip) => (
+        <View style={styles.topRatedChips}>
+          {chips.map((chip, index) => (
             <View key={chip} style={styles.topRatedChip}>
-              <Text style={styles.topRatedChipText}>{chip}</Text>
+              <Text style={[styles.topRatedChipText, index === 0 && styles.topRatedChipUnisex]}>
+                {chip}
+              </Text>
             </View>
           ))}
         </View>
@@ -386,17 +447,17 @@ function TopRatedSalonCard({ onPress, salon }: { onPress: () => void; salon: Sal
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
+function SectionTitle({ text }: { text: string }) {
+  return <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>{text}</Text>;
 }
 
 function PaginationDots({ activeIndex, count }: { activeIndex: number; count: number }) {
   return (
-    <View style={styles.paginationRow}>
+    <View style={styles.dotsRow}>
       {Array.from({ length: count }).map((_, index) => (
         <View
           key={`dot-${index}`}
-          style={[styles.paginationDot, index === activeIndex && styles.paginationDotActive]}
+          style={[styles.dot, index === activeIndex && styles.dotActive]}
         />
       ))}
     </View>
@@ -405,213 +466,158 @@ function PaginationDots({ activeIndex, count }: { activeIndex: number; count: nu
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
-    flex: 1,
-  },
-  screen: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 112,
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingBottom: 120,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   header: {
     alignItems: 'flex-start',
+    backgroundColor: colors.white,
+    elevation: 3,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    shadowColor: 'rgba(248, 158, 7, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
   },
-  headerLocation: {
+  headerLeft: {
     flex: 1,
+    gap: 4,
     paddingRight: 12,
   },
   locationRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 4,
-    marginBottom: 6,
+    gap: 6,
   },
   homeTitle: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
+    color: colors.heading,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.2,
   },
   addressText: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
+    color: colors.text,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    letterSpacing: -0.45,
+    lineHeight: 15,
   },
   headerActions: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
   },
-  offerPill: {
+  offersButton: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 18,
+    backgroundColor: colors.white,
+    borderColor: colors.goldBorder,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
-  offerPillText: {
-    color: colors.goldDark,
-    fontSize: 13,
-    fontWeight: '600',
+  offersButtonText: {
+    color: colors.gold,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
   avatar: {
-    borderRadius: 20,
+    borderColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 2,
     height: 40,
     width: 40,
   },
   heroBanner: {
-    borderRadius: 14,
-    height: 176,
-    marginBottom: 16,
+    borderRadius: 16,
+    elevation: 4,
+    height: 160,
     overflow: 'hidden',
-    position: 'relative',
+    shadowColor: 'rgba(44, 44, 44, 0.06)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
   },
-  heroBannerImage: {
+  heroImage: {
     height: '100%',
     width: '100%',
   },
-  heroBannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(61, 39, 20, 0.25)',
-  },
-  heroBannerContent: {
-    bottom: 16,
-    left: 16,
-    position: 'absolute',
-    right: 16,
-  },
-  heroEyebrow: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  heroTitle: {
-    color: colors.white,
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  heroSubtitle: {
-    color: '#f8eadc',
-    fontSize: 14,
-    marginTop: 4,
-  },
   searchBar: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceStrong,
+    backgroundColor: colors.white,
     borderColor: colors.border,
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
+    elevation: 2,
     flexDirection: 'row',
-    height: 50,
-    marginBottom: 14,
-    paddingHorizontal: 14,
+    gap: 12,
+    height: 48,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    shadowColor: 'rgba(44, 44, 44, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
   },
   searchInput: {
     color: colors.text,
     flex: 1,
-    fontSize: 14,
-    marginLeft: 10,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
   },
-  appointmentCard: {
+  appointmentsCard: {
     alignItems: 'center',
-    backgroundColor: '#fdf7f0',
-    borderColor: '#efc8a7',
-    borderRadius: 16,
+    backgroundColor: colors.cardCream,
+    borderColor: colors.apptBorder,
+    borderRadius: 20,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 22,
-    minHeight: 54,
+    marginTop: 16,
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
-  appointmentCardLeft: {
+  appointmentsLeft: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 12,
   },
-  appointmentIconShell: {
+  appointmentsIcon: {
     alignItems: 'center',
-    backgroundColor: '#fde9d6',
+    backgroundColor: colors.offerIconBg,
     borderRadius: 12,
     height: 34,
     justifyContent: 'center',
-    marginRight: 12,
     width: 34,
   },
-  appointmentText: {
+  appointmentsText: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 18,
+    letterSpacing: -0.2,
   },
-  sectionBlock: {
-    marginBottom: 24,
+  section: {
+    marginTop: 24,
   },
   sectionTitle: {
     color: colors.text,
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 1.1,
-    marginBottom: 14,
   },
-  horizontalSectionContent: {
-    gap: 12,
-    paddingRight: 12,
-  },
-  offerCard: {
-    backgroundColor: colors.offer,
-    borderRadius: 18,
-    minHeight: 132,
-    padding: 16,
-    width: 250,
-  },
-  offerTag: {
-    alignItems: 'center',
-    backgroundColor: '#fbeedc',
-    borderRadius: 14,
-    height: 30,
-    justifyContent: 'center',
-    marginBottom: 14,
-    width: 30,
-  },
-  offerCardTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  offerCardSubtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  paginationRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    justifyContent: 'center',
-    marginBottom: 18,
-    marginTop: 12,
-  },
-  paginationDot: {
-    backgroundColor: '#dac7b7',
-    borderRadius: 4,
-    height: 8,
-    width: 8,
-  },
-  paginationDotActive: {
-    backgroundColor: colors.gold,
-    width: 18,
+  sectionTitleSpaced: {
+    marginTop: 24,
   },
   sectionHeaderRow: {
     alignItems: 'center',
@@ -619,247 +625,373 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
-  essentialsRow: {
-    gap: 14,
-    paddingRight: 10,
+  offersRow: {
+    gap: 12,
+    marginTop: 14,
+    paddingRight: 8,
   },
-  essentialItem: {
-    width: 92,
+  offerCard: {
+    borderColor: colors.offerBorder,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: 220,
   },
-  essentialImage: {
-    backgroundColor: colors.chip,
-    borderRadius: 18,
-    height: 84,
-    marginBottom: 8,
-    width: 92,
+  offerTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  essentialLabel: {
+  offerIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  offerTitle: {
+    color: colors.offerDark,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  offerSubtitle: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontFamily: 'Inter_300Light',
+    fontSize: 10,
+    lineHeight: 14.4,
+  },
+  dotsRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  dot: {
+    backgroundColor: colors.dotInactive,
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  dotActive: {
+    backgroundColor: colors.gold,
+    width: 18,
+  },
+  seeAll: {
+    alignItems: 'center',
+    flexDirection: 'row',
   },
   seeAllText: {
-    color: colors.goldDark,
-    fontSize: 12.5,
-    fontWeight: '700',
+    color: colors.gold,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    letterSpacing: 0.7,
   },
-  nearbyCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 18,
-    borderWidth: 1,
+  nearYouRow: {
+    gap: 16,
+    paddingRight: 8,
+  },
+  nearYouCard: {
+    gap: 12,
+    width: 240,
+  },
+  nearYouImageWrap: {
+    borderRadius: 24,
+    height: 160,
     overflow: 'hidden',
-    width: 252,
   },
-  nearbyImage: {
-    height: 150,
+  nearYouImage: {
+    height: '100%',
     width: '100%',
   },
-  nearbyBadgeLeft: {
-    alignItems: 'center',
-    backgroundColor: '#fff3e2',
-    borderRadius: 14,
-    height: 28,
-    justifyContent: 'center',
-    left: 12,
-    position: 'absolute',
-    top: 12,
-    width: 28,
+  nearYouGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
-  nearbyBadgeRight: {
-    backgroundColor: 'rgba(30, 22, 17, 0.72)',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  nearYouBadges: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+    left: 12,
     position: 'absolute',
     right: 12,
     top: 12,
   },
-  nearbyBadgeRightText: {
+  nearYouHeart: {
+    alignItems: 'center',
+    backgroundColor: colors.badgeDark,
+    borderColor: colors.badgeBorder,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 28,
+    justifyContent: 'center',
+    marginRight: 'auto',
+    width: 28,
+  },
+  nearYouRating: {
+    alignItems: 'center',
+    backgroundColor: colors.badgeDark,
+    borderColor: colors.badgeBorder,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  nearYouRatingText: {
     color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
-  nearbyContent: {
-    padding: 14,
+  nearYouContent: {
+    bottom: 12,
+    gap: 4,
+    left: 16,
+    position: 'absolute',
+    right: 16,
   },
-  nearbyTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
+  nearYouName: {
+    color: colors.white,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 18,
   },
-  metaRow: {
+  nearYouMetaRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
+    gap: 8,
   },
-  metaText: {
-    color: colors.muted,
-    fontSize: 13,
-  },
-  chipRow: {
+  nearYouMeta: {
+    alignItems: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 14,
+    gap: 4,
   },
-  categoryChip: {
-    backgroundColor: colors.chip,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  nearYouMetaText: {
+    color: colors.onImage,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
   },
-  categoryChipText: {
+  nearYouMetaDivider: {
+    backgroundColor: colors.onImageDivider,
+    height: 12,
+    width: 1,
+  },
+  servicePills: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  servicePill: {
+    backgroundColor: colors.pill,
+    borderColor: colors.pillBorder,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  servicePillText: {
     color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
-  centeredDividerTitle: {
+  dividerHeading: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   dividerLine: {
     backgroundColor: colors.border,
     flex: 1,
     height: 1,
   },
+  dividerTitle: {
+    color: colors.text,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    letterSpacing: 1.4,
+  },
   servicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   serviceCard: {
-    backgroundColor: colors.surfaceStrong,
-    borderRadius: 18,
-    elevation: 4,
-    minHeight: 120,
-    overflow: 'hidden',
-    shadowColor: '#bfa28b',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    width: '48%',
-  },
-  serviceAccent: {
-    backgroundColor: colors.gold,
-    height: '100%',
-    left: 0,
-    position: 'absolute',
-    top: 0,
-    width: 6,
-  },
-  serviceContent: {
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: colors.cardCream,
+    borderRadius: 18,
+    elevation: 3,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    minHeight: 84,
+    overflow: 'hidden',
+    padding: 16,
+    shadowColor: 'rgba(44, 44, 44, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    width: '47%',
   },
-  serviceTextWrap: {
+  serviceText: {
     flex: 1,
+    gap: 4,
     paddingRight: 8,
   },
   serviceTitle: {
-    color: colors.text,
+    color: colors.heading,
+    fontFamily: 'Poppins_700Bold',
     fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 6,
   },
   serviceSubtitle: {
-    color: colors.muted,
-    fontSize: 13,
+    color: colors.serviceSub,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
   },
-  serviceImage: {
-    borderRadius: 16,
-    height: 72,
-    width: 54,
+  serviceThumb: {
+    borderRadius: 12,
+    height: 52,
+    width: 52,
+  },
+  essentialsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  essentialItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  essentialCircle: {
+    alignItems: 'center',
+    backgroundColor: colors.tan,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 64,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 64,
+  },
+  essentialImage: {
+    height: 40,
+    width: 40,
+  },
+  essentialLabel: {
+    color: colors.text,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+  },
+  topRatedHeading: {
+    color: colors.topHeading,
+    marginBottom: 16,
   },
   topRatedList: {
     gap: 16,
   },
   topRatedCard: {
-    backgroundColor: colors.surfaceStrong,
-    borderColor: colors.border,
-    borderRadius: 20,
+    backgroundColor: colors.cardCream2,
+    borderColor: colors.pillBorder,
+    borderRadius: 8,
     borderWidth: 1,
+    elevation: 3,
     overflow: 'hidden',
+    shadowColor: 'rgba(44, 44, 44, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
   },
   topRatedImageWrap: {
-    height: 188,
+    height: 180,
     position: 'relative',
   },
   topRatedImage: {
     height: '100%',
     width: '100%',
   },
-  topRatedOfferBadge: {
-    backgroundColor: colors.goldDark,
-    borderBottomRightRadius: 14,
-    borderTopLeftRadius: 18,
+  topRatedOffer: {
+    backgroundColor: colors.white,
+    borderBottomRightRadius: 8,
     left: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     position: 'absolute',
     top: 0,
   },
   topRatedOfferText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '800',
+    color: colors.gold,
+    fontFamily: 'Inter_800ExtraBold',
+    fontSize: 13,
   },
-  topRatedCartButton: {
+  topRatedFav: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 250, 244, 0.94)',
-    borderRadius: 18,
+    backgroundColor: colors.onImage,
+    borderRadius: 12,
     height: 36,
     justifyContent: 'center',
     position: 'absolute',
-    right: 14,
-    top: 14,
+    right: 12,
+    top: 12,
     width: 36,
   },
   topRatedContent: {
+    gap: 8,
     padding: 16,
   },
   topRatedTitleRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
   },
-  topRatedTitle: {
-    color: colors.text,
+  topRatedName: {
+    color: colors.heading,
     flex: 1,
-    fontSize: 19,
-    fontWeight: '800',
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 20,
+    letterSpacing: -0.2,
     paddingRight: 10,
   },
   topRatedRating: {
-    color: colors.goldDark,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  topRatedChipRow: {
+    alignItems: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 4,
+  },
+  topRatedRatingText: {
+    color: colors.heading,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  topRatedMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  topRatedMetaText: {
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+  },
+  topRatedChips: {
+    flexDirection: 'row',
     gap: 8,
-    marginTop: 14,
+    marginTop: 4,
   },
   topRatedChip: {
-    backgroundColor: colors.chip,
-    borderRadius: 16,
+    backgroundColor: colors.chipBg,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   topRatedChipText: {
     color: colors.text,
-    fontSize: 11.5,
-    fontWeight: '700',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  topRatedChipUnisex: {
+    color: colors.chipUnisex,
   },
 });
