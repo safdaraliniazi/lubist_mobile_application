@@ -91,7 +91,7 @@ export function OtpVerifyScreen() {
           onSuccess: (verifyData) => {
             // Once OTP is verified, create the account
             registerUser(
-              { ...signupData, verification_token: verificationId },
+              { ...signupData, verification_token: verifyData.verification_token },
               {
                 onSuccess: () => {
                   Alert.alert('Success', 'Account created successfully!');

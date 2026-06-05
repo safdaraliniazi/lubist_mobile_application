@@ -12,11 +12,13 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
+import { useLogin } from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -48,11 +50,23 @@ export function EmailLoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const isValid = /^\S+@\S+\.\S+$/.test(email) && password.length >= 1;
+  const { mutate: loginUser, isPending } = useLogin();
+  const isValid = /^\S+@\S+\.\S+$/.test(email) && password.length >= 1 && !isPending;
 
-  // No network yet: this just signs in locally. Wire to POST /auth/login later
-  // (response user_role decides the role: customer->client, etc.).
-  const handleLogin = () => signIn('client');
+  const handleLogin = () => {
+    loginUser(
+      { email, password },
+      {
+        onSuccess: (data) => {
+          // Logged in! Call signIn to update Context state
+          signIn('client');
+        },
+        onError: (error: any) => {
+          Alert.alert('Login Failed', error.message || 'Invalid email or password.');
+        }
+      }
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
@@ -137,7 +151,7 @@ export function EmailLoginScreen() {
                   start={{ x: 0, y: 0 }}
                   style={styles.cta}
                 >
-                  <Text style={styles.ctaText}>LOG IN</Text>
+                  <Text style={styles.ctaText}>{isPending ? 'LOGGING IN...' : 'LOG IN'}</Text>
                 </LinearGradient>
               </Pressable>
 

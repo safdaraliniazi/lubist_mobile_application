@@ -80,6 +80,15 @@ export function SignInScreen() {
           const errorMessage = error.message?.toLowerCase() || '';
           if (errorMessage.includes('not registered') || errorMessage.includes('404')) {
             navigation.navigate('Signup', { phone: phoneNumber, countryCode: COUNTRY_CODE } as any);
+          } else if (errorMessage.includes('not verified') || errorMessage.includes('403')) {
+            Alert.alert(
+              'Phone Not Verified',
+              'This phone number is registered but not verified. Please log in with your Email and verify your phone in Profile settings.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Login with Email', onPress: () => navigation.navigate('EmailLogin') }
+              ]
+            );
           } else {
             Alert.alert('Error', error.message || 'Failed to send OTP');
           }
