@@ -1,82 +1,176 @@
-import { useMutation } from '@tanstack/react-query';
-import { apiPost } from '../client';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { apiGet, apiPost, apiPut } from '../client';
 
-// Types derived from backend auth.py
-export interface PhoneLoginSendOTPRequest {
-  phone: string;
-  country_code?: string;
+// ==========================================
+// TYPES & INTERFACES (Mapped from auth.py)
+// ==========================================
+
+export interface LoginRequest { email?: string; password?: string; }
+export interface SignupRequest { 
+  email?: string; 
+  password?: string; 
+  full_name?: string; 
+  phone?: string; 
+  age?: number; 
+  gender?: string; 
+  user_role?: string; 
+  verification_token?: string; 
+}
+export interface RefreshTokenRequest { refresh_token: string; }
+export interface UserProfileUpdate { 
+  full_name?: string; 
+  phone?: string; 
+  age?: number; 
+  gender?: string; 
+}
+export interface LogoutAllRequest { password?: string; }
+export interface PasswordResetRequest { email: string; }
+export interface PasswordResetConfirm { token: string; new_password?: string; }
+
+// Phone API Shared Types
+export interface PhoneOTPRequest { 
+  phone: string; 
+  country_code?: string; 
+}
+export interface PhoneOTPResponse { 
+  success: boolean; 
+  message: string; 
+  verification_id: string; 
+  expires_in: number; 
+  phone: string; 
+  customer_name?: string; 
+}
+export interface PhoneVerifyRequest { 
+  phone: string; 
+  otp: string; 
+  verification_id: string; 
+}
+export interface AuthTokensResponse { 
+  success: boolean; 
+  message: string; 
+  access_token: string; 
+  refresh_token: string; 
+  token_type: string; 
+  user: any; 
 }
 
-export interface PhoneLoginSendOTPResponse {
-  success: boolean;
-  message: string;
-  verification_id: string;
-  expires_in: number;
-  phone: string;
-  customer_name: string;
-}
+// ==========================================
+// CORE AUTH HOOKS (Email/Password)
+// ==========================================
 
-export interface PhoneLoginVerifyOTPRequest {
-  phone: string;
-  otp: string;
-  verification_id: string;
-}
-
-export interface PhoneLoginVerifyOTPResponse {
-  success: boolean;
-  message: string;
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  user: {
-    id: string;
-    email: string;
-    full_name: string;
-    user_role: string;
-    role: string;
-    phone: string;
-    is_active: boolean;
-  };
-}
-
-// TanStack Query Hooks
-export function useSendPhoneOtp() {
+export function useLogin() {
   return useMutation({
-    mutationFn: async (data: PhoneLoginSendOTPRequest) => {
-      return await apiPost<PhoneLoginSendOTPResponse>('/api/v1/auth/login/phone/send-otp', data);
-    },
-  });
-}
-
-export function useVerifyPhoneOtp() {
-  return useMutation({
-    mutationFn: async (data: PhoneLoginVerifyOTPRequest) => {
-      return await apiPost<PhoneLoginVerifyOTPResponse>('/api/v1/auth/login/phone/verify-otp', data);
-    },
-  });
-}
-
-export function useSendSignupPhoneOtp() {
-  return useMutation({
-    mutationFn: async (data: PhoneLoginSendOTPRequest) => {
-      return await apiPost<PhoneLoginSendOTPResponse>('/api/v1/auth/signup/phone/send-otp', data);
-    },
-  });
-}
-
-export function useVerifySignupPhoneOtp() {
-  return useMutation({
-    // Returns verification details instead of access tokens
-    mutationFn: async (data: PhoneLoginVerifyOTPRequest) => {
-      return await apiPost<any>('/api/v1/auth/signup/phone/verify-otp', data);
-    },
+    mutationFn: async (data: LoginRequest) => await apiPost<AuthTokensResponse>('/api/v1/auth/login', data)
   });
 }
 
 export function useSignup() {
   return useMutation({
-    mutationFn: async (data: any) => {
-      return await apiPost<any>('/api/v1/auth/signup', data);
-    },
+    mutationFn: async (data: SignupRequest) => await apiPost<any>('/api/v1/auth/signup', data)
+  });
+}
+
+export function useRefreshToken() {
+  return useMutation({
+    mutationFn: async (data: RefreshTokenRequest) => await apiPost<any>('/api/v1/auth/refresh', data)
+  });
+}
+
+// ==========================================
+// USER PROFILE HOOKS (Requires Token)
+// ==========================================
+
+export function useGetUserProfile() {
+  return useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => await apiGet<any>('/api/v1/auth/me'),
+  });
+}
+
+export function useUpdateUserProfile() {
+  return useMutation({
+    mutationFn: async (data: UserProfileUpdate) => await apiPut<any>('/api/v1/auth/me', data)
+  });
+}
+
+// ==========================================
+// LOGOUT & PASSWORD HOOKS
+// ==========================================
+
+export function useLogout() {
+  return useMutation({
+    mutationFn: async () => await apiPost<any>('/api/v1/auth/logout', {})
+  });
+}
+
+export function useLogoutAll() {
+  return useMutation({
+    mutationFn: async (data: LogoutAllRequest) => await apiPost<any>('/api/v1/auth/logout-all', data)
+  });
+}
+
+export function usePasswordReset() {
+  return useMutation({
+    mutationFn: async (data: PasswordResetRequest) => await apiPost<any>('/api/v1/auth/password-reset', data)
+  });
+}
+
+export function usePasswordResetConfirm() {
+  return useMutation({
+    mutationFn: async (data: PasswordResetConfirm) => await apiPost<any>('/api/v1/auth/password-reset/confirm', data)
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: async () => await apiPost<any>('/api/v1/auth/resend-verification', {})
+  });
+}
+
+// ==========================================
+// PHONE SIGNUP HOOKS (Unauthenticated)
+// ==========================================
+
+export function useSendSignupPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneOTPRequest) => await apiPost<PhoneOTPResponse>('/api/v1/auth/signup/phone/send-otp', data)
+  });
+}
+
+export function useVerifySignupPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneVerifyRequest) => await apiPost<any>('/api/v1/auth/signup/phone/verify-otp', data)
+  });
+}
+
+// ==========================================
+// PHONE LOGIN HOOKS (Unauthenticated)
+// ==========================================
+
+export function useSendPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneOTPRequest) => await apiPost<PhoneOTPResponse>('/api/v1/auth/login/phone/send-otp', data)
+  });
+}
+
+export function useVerifyPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneVerifyRequest) => await apiPost<AuthTokensResponse>('/api/v1/auth/login/phone/verify-otp', data)
+  });
+}
+
+// ==========================================
+// PHONE VERIFICATION HOOKS (For existing users updating profile)
+// ==========================================
+
+export function useSendVerifyPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneOTPRequest) => await apiPost<PhoneOTPResponse>('/api/v1/auth/verify-phone/send-otp', data)
+  });
+}
+
+export function useConfirmVerifyPhoneOtp() {
+  return useMutation({
+    mutationFn: async (data: PhoneVerifyRequest) => await apiPost<any>('/api/v1/auth/verify-phone/confirm-otp', data)
   });
 }

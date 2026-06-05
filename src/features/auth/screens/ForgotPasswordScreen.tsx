@@ -12,10 +12,12 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
+import { usePasswordReset } from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -46,11 +48,22 @@ export function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
 
-  const isValid = /^\S+@\S+\.\S+$/.test(email);
+  const { mutate: resetPassword, isPending } = usePasswordReset();
+  const isValid = /^\S+@\S+\.\S+$/.test(email) && !isPending;
 
-  // No network yet: just flips to the confirmation state. Wire to
-  // POST /auth/password-reset later.
-  const handleSubmit = () => setSent(true);
+  const handleSubmit = () => {
+    resetPassword(
+      { email },
+      {
+        onSuccess: () => {
+          setSent(true);
+        },
+        onError: (error: any) => {
+          Alert.alert('Error', error.message || 'Failed to send reset link.');
+        }
+      }
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
@@ -139,7 +152,7 @@ export function ForgotPasswordScreen() {
                       start={{ x: 0, y: 0 }}
                       style={styles.cta}
                     >
-                      <Text style={styles.ctaText}>SEND RESET LINK</Text>
+                      <Text style={styles.ctaText}>{isPending ? 'SENDING...' : 'SEND RESET LINK'}</Text>
                     </LinearGradient>
                   </Pressable>
                 </View>
