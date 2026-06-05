@@ -5,6 +5,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
+import { useVerifyPhoneOtp, useVerifySignupPhoneOtp, useSignup } from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -55,12 +58,18 @@ export function OtpVerifyScreen() {
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const { phone, countryCode } = route.params;
+  const { phone, countryCode, verificationId, isSignup, signupData } = route.params;
 
   const [code, setCode] = useState('');
   const [focused, setFocused] = useState(false);
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const inputRef = useRef<TextInput>(null);
+  
+  const { mutate: verifyOtp, isPending: isVerifyPending } = useVerifyPhoneOtp();
+  const { mutate: verifySignupOtp, isPending: isVerifySignupPending } = useVerifySignupPhoneOtp();
+  const { mutate: registerUser, isPending: isSignupPending } = useSignup();
+
+  const isPending = isVerifyPending || isVerifySignupPending || isSignupPending;
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -68,15 +77,51 @@ export function OtpVerifyScreen() {
     return () => clearTimeout(timer);
   }, [seconds]);
 
-  const isComplete = code.length === OTP_LENGTH;
+  const isComplete = code.length === OTP_LENGTH && !isPending;
 
   const handleChange = (value: string) => {
     setCode(value.replace(/[^\d]/g, '').slice(0, OTP_LENGTH));
   };
 
-  // No network yet: any 6-digit code signs in. Wire to
-  // POST /auth/login/phone/verify-otp later.
-  const handleVerify = () => signIn('client');
+  const handleVerify = () => {
+    if (isSignup) {
+      verifySignupOtp(
+        { phone, otp: code, verification_id: verificationId },
+        {
+          onSuccess: (verifyData) => {
+            // Once OTP is verified, create the account
+            registerUser(
+              { ...signupData, verification_token: verificationId },
+              {
+                onSuccess: () => {
+                  Alert.alert('Success', 'Account created successfully!');
+                  navigation.navigate('SignIn');
+                },
+                onError: (error: any) => {
+                  Alert.alert('Signup Failed', error.message || 'Could not create account.');
+                }
+              }
+            );
+          },
+          onError: (error: any) => {
+            Alert.alert('Verification Failed', error.message || 'Invalid or expired OTP. Please try again.');
+          }
+        }
+      );
+    } else {
+      verifyOtp(
+        { phone, otp: code, verification_id: verificationId },
+        {
+          onSuccess: (data) => {
+            signIn('client');
+          },
+          onError: (error: any) => {
+            Alert.alert('Verification Failed', error.message || 'Invalid or expired OTP. Please try again.');
+          }
+        }
+      );
+    }
+  };
 
   const handleResend = () => {
     if (seconds > 0) return;
@@ -159,7 +204,11 @@ export function OtpVerifyScreen() {
                   start={{ x: 0, y: 0 }}
                   style={styles.cta}
                 >
-                  <Text style={styles.ctaText}>VERIFY & CONTINUE</Text>
+                  {isPending ? (
+                    <ActivityIndicator color={colors.ctaText} />
+                  ) : (
+                    <Text style={styles.ctaText}>VERIFY & CONTINUE</Text>
+                  )}
                 </LinearGradient>
               </Pressable>
 

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
+import { useSendPhoneOtp } from '@/services/api/hooks/useAuthAPI';
 
 // Assets exported 1:1 from Figma ("Onboarding - Vibrant Luxury").
 const logo = require('@/assets/auth/lubist-logo.png');
@@ -58,13 +61,31 @@ export function SignInScreen() {
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const { mutate: sendOtp, isPending } = useSendPhoneOtp();
 
-  const isContinueEnabled = phoneNumber.length >= 10;
+  const isContinueEnabled = phoneNumber.length >= 10 && !isPending;
 
-  // No network yet: this just advances to the OTP screen. Wire to
-  // POST /auth/login/phone/send-otp later (404 -> navigate to Signup).
   const handleContinue = () => {
-    navigation.navigate('OtpVerify', { phone: phoneNumber, countryCode: COUNTRY_CODE });
+    sendOtp(
+      { phone: phoneNumber, country_code: COUNTRY_CODE },
+      {
+        onSuccess: (data) => {
+          navigation.navigate('OtpVerify', {
+            phone: phoneNumber,
+            countryCode: COUNTRY_CODE,
+            verificationId: data.verification_id
+          } as any);
+        },
+        onError: (error: any) => {
+          const errorMessage = error.message?.toLowerCase() || '';
+          if (errorMessage.includes('not registered') || errorMessage.includes('404')) {
+            navigation.navigate('Signup', { phone: phoneNumber, countryCode: COUNTRY_CODE } as any);
+          } else {
+            Alert.alert('Error', error.message || 'Failed to send OTP');
+          }
+        }
+      }
+    );
   };
 
   return (
@@ -91,6 +112,7 @@ export function SignInScreen() {
                 onContinue={handleContinue}
                 onChangePhone={(value) => setPhoneNumber(value.replace(/[^\d]/g, ''))}
                 phoneNumber={phoneNumber}
+                isPending={isPending}
               />
 
               <View style={styles.divider}>
@@ -158,11 +180,13 @@ function LoginForm({
   onChangePhone,
   onContinue,
   phoneNumber,
+  isPending,
 }: {
   isContinueEnabled: boolean;
   onChangePhone: (value: string) => void;
   onContinue: () => void;
   phoneNumber: string;
+  isPending?: boolean;
 }) {
   return (
     <View style={styles.form}>
@@ -197,7 +221,11 @@ function LoginForm({
           start={{ x: 0, y: 0 }}
           style={styles.cta}
         >
-          <Text style={styles.ctaText}>CONTINUE</Text>
+          {isPending ? (
+            <ActivityIndicator color={colors.ctaText} />
+          ) : (
+            <Text style={styles.ctaText}>CONTINUE</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

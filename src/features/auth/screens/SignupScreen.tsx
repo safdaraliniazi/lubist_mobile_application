@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
+import { useSendSignupPhoneOtp } from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -76,9 +78,35 @@ export function SignupScreen() {
     ageNum <= 120 &&
     gender !== null;
 
-  // No network yet: this just signs in locally. Wire to
-  // POST /auth/signup/phone/send-otp -> verify-otp -> POST /auth/signup later.
-  const handleSignup = () => signIn('client');
+  const { mutate: sendOtp, isPending } = useSendSignupPhoneOtp();
+
+  const handleSignup = () => {
+    sendOtp(
+      { phone, country_code: countryCode },
+      {
+        onSuccess: (data) => {
+          navigation.navigate('OtpVerify', {
+            phone,
+            countryCode,
+            verificationId: data.verification_id,
+            isSignup: true,
+            signupData: {
+              email,
+              password,
+              full_name: fullName,
+              phone: `+${countryCode}${phone}`,
+              age: ageNum,
+              gender,
+              user_role: 'customer'
+            }
+          });
+        },
+        onError: (error: any) => {
+          Alert.alert('Error', error.message || 'Failed to send OTP for signup');
+        }
+      }
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
@@ -204,12 +232,12 @@ export function SignupScreen() {
               </Field>
 
               <Pressable
-                disabled={!isValid}
+                disabled={!isValid || isPending}
                 onPress={handleSignup}
                 style={({ pressed }) => [
                   styles.ctaShadow,
-                  !isValid && styles.ctaDisabled,
-                  pressed && isValid && styles.ctaPressed,
+                  (!isValid || isPending) && styles.ctaDisabled,
+                  pressed && isValid && !isPending && styles.ctaPressed,
                 ]}
               >
                 <LinearGradient
@@ -218,7 +246,7 @@ export function SignupScreen() {
                   start={{ x: 0, y: 0 }}
                   style={styles.cta}
                 >
-                  <Text style={styles.ctaText}>CREATE ACCOUNT</Text>
+                  <Text style={styles.ctaText}>{isPending ? 'SENDING OTP...' : 'CREATE ACCOUNT'}</Text>
                 </LinearGradient>
               </Pressable>
 

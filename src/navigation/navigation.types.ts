@@ -26,6 +26,9 @@ export type AuthStackParamList = {
   OtpVerify: {
     phone: string;
     countryCode: string;
+    verificationId: string;
+    isSignup?: boolean;
+    signupData?: any;
   };
   Signup: {
     phone?: string;
