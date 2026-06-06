@@ -59,7 +59,10 @@ export function EmailLoginScreen() {
       {
         onSuccess: (data) => {
           // Logged in! Call signIn to update Context state
-          signIn('client');
+          signIn(data.user || { role: 'client' }, {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token
+          });
         },
         onError: (error: any) => {
           Alert.alert('Login Failed', error.message || 'Invalid email or password.');

@@ -113,7 +113,10 @@ export function OtpVerifyScreen() {
         { phone, otp: code, verification_id: verificationId },
         {
           onSuccess: (data) => {
-            signIn('client');
+            signIn(data.user || { role: 'client' }, {
+              access_token: data.access_token,
+              refresh_token: data.refresh_token
+            });
           },
           onError: (error: any) => {
             Alert.alert('Verification Failed', error.message || 'Invalid or expired OTP. Please try again.');

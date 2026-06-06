@@ -12,6 +12,8 @@ import type {
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
+import { useAuth } from '@/store/AuthContext';
+import { useLogout } from '@/services/api/hooks/useAuthAPI';
 
 const topLumina = require('@/assets/home/top-lumina.png');
 const topAura = require('@/assets/home/top-aura.png');
@@ -95,11 +97,26 @@ export function ClientAccountScreen() {
   const navigation = useNavigation<SavedNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const [tab, setTab] = useState<Tab>('salons');
+  
+  const { signOut } = useAuth();
+  const { mutate: logoutUser } = useLogout();
+
+  const handleLogout = () => {
+    logoutUser(undefined, {
+      onSettled: () => {
+        signOut();
+      }
+    });
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Saved</Text>
+        <Pressable onPress={handleLogout} style={styles.logoutBtn}>
+          <Ionicons color={colors.text} name="log-out-outline" size={20} />
+          <Text style={styles.logoutText}>Log out</Text>
+        </Pressable>
       </View>
 
       <View style={styles.segment}>
@@ -204,8 +221,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    alignItems: 'center',
     backgroundColor: colors.white,
     elevation: 3,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 18,
     shadowColor: 'rgba(248, 158, 7, 0.08)',
@@ -218,6 +238,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_600SemiBold',
     fontSize: 22,
     letterSpacing: -0.2,
+  },
+  logoutBtn: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  logoutText: {
+    color: colors.text,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
   segment: {
     backgroundColor: colors.segmentBg,

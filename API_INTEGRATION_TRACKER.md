@@ -30,7 +30,7 @@
 
 | Domain | Total | Integrated (🟢/✅) | Mobile priority |
 |--------|------:|------------------:|-----------------|
-| Auth | 16 | 5 | 🔴 High |
+| Auth | 16 | 9 | 🔴 High |
 | Location | 3 | 0 | 🔴 High |
 | Salons (public) | 16 | 0 | 🔴 High |
 | Bookings | 8 | 0 | 🔴 High |
@@ -43,9 +43,9 @@
 | Careers | 6 | 0 | 🟡 Low |
 | Upload | 6 | 0 | 🟠 Medium |
 | Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **5** | |
+| **TOTAL** | **170** | **9** | |
 
-**Overall: 5 / 170 endpoints integrated (~3%).**
+**Overall: 9 / 170 endpoints integrated (~5%).**
 
 ---
 
@@ -54,9 +54,9 @@
 | Item | Status | Notes / TODO |
 |------|--------|--------------|
 | TanStack Query provider | ✅ | `src/app/providers/AppProviders.tsx` |
-| Base fetch client (`apiGet`/`apiPost`) | 🟡 | `src/services/api/client.ts` — **no auth header, no PUT/PATCH/DELETE helpers, no refresh-on-401** |
-| Auth token storage | 🟡 | `src/services/storage/tokenStorage.ts` — **in-memory only; needs `expo-secure-store` persistence** |
-| AuthContext (real session) | ⬜ | `src/store/AuthContext.tsx` is a **mock** (role only) — needs token + user + persisted login |
+| Base fetch client (`apiGet`/`apiPost`) | 🟢 | `src/services/api/client.ts` — **added auth headers, PUT/PATCH/DELETE helpers, and auto refresh-on-401** |
+| Auth token storage | 🟢 | `src/services/storage/tokenStorage.ts` — **using `expo-secure-store` persistence** |
+| AuthContext (real session) | 🟢 | `src/store/AuthContext.tsx` — **holds real token + user, auto-restores login on launch** |
 | Query key conventions | ⬜ | Define a `queryKeys` factory once we add `useQuery` reads |
 | Centralized error handling | ⬜ | Map backend `{detail}` shape to UI toasts |
 | Env config per environment | 🟡 | `src/app/config/env.ts` hardcodes localhost — add staging/prod |
@@ -71,22 +71,22 @@ File: `backend/app/api/auth.py` · Mobile hooks: `src/services/api/hooks/useAuth
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| POST | `/auth/login` | public | — | EmailLoginScreen (mock) | ⬜ |
+| POST | `/auth/login` | public | `useLogin` | EmailLoginScreen | 🟢 |
 | POST | `/auth/signup` | public | `useSignup` | OtpVerifyScreen | 🟢 |
-| POST | `/auth/refresh` | public | — | — | ⬜ |
-| GET | `/auth/me` | bearer | — | — | ⬜ |
-| PUT | `/auth/me` | bearer | — | — | ⬜ |
-| POST | `/auth/logout` | bearer | — | — | ⬜ |
-| POST | `/auth/logout-all` | bearer | — | — | ⬜ |
-| POST | `/auth/password-reset` | public | — | ForgotPasswordScreen | ⬜ |
-| POST | `/auth/password-reset/confirm` | public | — | — | ⬜ |
-| POST | `/auth/resend-verification` | public | — | — | ⬜ |
+| POST | `/auth/refresh` | public | (auto via client) | — | 🟢 |
+| GET | `/auth/me` | bearer | `useGetUserProfile` | — | ⬜ |
+| PUT | `/auth/me` | bearer | `useUpdateUserProfile` | — | ⬜ |
+| POST | `/auth/logout` | bearer | `useLogout` | ClientAccountScreen | 🟢 |
+| POST | `/auth/logout-all` | bearer | `useLogoutAll` | — | ⬜ |
+| POST | `/auth/password-reset` | public | `usePasswordReset` | ForgotPasswordScreen | 🟢 |
+| POST | `/auth/password-reset/confirm` | public | `usePasswordResetConfirm` | — | ⬜ |
+| POST | `/auth/resend-verification` | public | `useResendVerification` | — | ⬜ |
 | POST | `/auth/signup/phone/send-otp` | public | `useSendSignupPhoneOtp` | SignupScreen | 🟢 |
 | POST | `/auth/signup/phone/verify-otp` | public | `useVerifySignupPhoneOtp` | OtpVerifyScreen | 🟢 |
 | POST | `/auth/login/phone/send-otp` | public | `useSendPhoneOtp` | SignInScreen | 🟢 |
 | POST | `/auth/login/phone/verify-otp` | public | `useVerifyPhoneOtp` | OtpVerifyScreen | 🟢 |
-| POST | `/auth/verify-phone/send-otp` | bearer | — | — | ⬜ |
-| POST | `/auth/verify-phone/confirm-otp` | bearer | — | — | ⬜ |
+| POST | `/auth/verify-phone/send-otp` | bearer | `useSendVerifyPhoneOtp` | — | ⬜ |
+| POST | `/auth/verify-phone/confirm-otp` | bearer | `useConfirmVerifyPhoneOtp` | — | ⬜ |
 
 ---
 
