@@ -3,6 +3,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -10,10 +11,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { lumiereBeautyStudio } from '@/features/client/data/salons';
-import type { ClientStackParamList, SalonRouteData } from '@/navigation/navigation.types';
+import type { ClientStackParamList } from '@/navigation/navigation.types';
+import {
+  useSalonDetail,
+  useSalonReviews,
+  type SalonService,
+  type SalonReview,
+} from '@/services/api/hooks/useSalonsAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
 
 const colors = {
   background: '#FFFAF5',
@@ -33,36 +41,9 @@ const colors = {
   white: '#ffffff',
 };
 
-// All assets exported 1:1 from Figma ("Salon display page").
-const heroImg = require('@/assets/salon/hero.png');
-const avatarEleanor = require('@/assets/salon/avatar-eleanor.png');
-const review1 = require('@/assets/salon/review1.png');
-const review2 = require('@/assets/salon/review2.png');
+// Fallbacks used only when a salon has no remote images (exported 1:1 from Figma).
+const heroFallback = require('@/assets/salon/hero.png');
 const mapImg = require('@/assets/salon/map.png');
-
-// Gallery slot 5 reuses slot 4's image (it sits behind the "+12 More" overlay in Figma).
-const gallery = [
-  require('@/assets/salon/gallery1.png'),
-  require('@/assets/salon/gallery2.png'),
-  require('@/assets/salon/gallery3.png'),
-  require('@/assets/salon/gallery4.png'),
-  require('@/assets/salon/gallery4.png'),
-];
-
-const serviceItems = [
-  { id: 'haircare', label: 'Hair Care', image: require('@/assets/salon/svc-haircare.png') },
-  { id: 'nailbar', label: 'Nail Bar', image: require('@/assets/salon/svc-nailbar.png') },
-  { id: 'face', label: 'Face', image: require('@/assets/salon/svc-face.png') },
-  { id: 'treatments', label: 'Treatments', image: require('@/assets/salon/svc-treatments.png') },
-  { id: 'massage', label: 'Massage & Spa', image: require('@/assets/salon/svc-massage.png') },
-  { id: 'mens', label: "Men's Grooming", image: require('@/assets/salon/svc-mens.png') },
-  { id: 'manicure', label: 'Manicure & Pedicure', image: require('@/assets/salon/svc-manicure.png') },
-  { id: 'waxing', label: 'Waxing', image: require('@/assets/salon/svc-waxing.png') },
-  { id: 'bleaching', label: 'Bleaching & Threading', image: require('@/assets/salon/svc-bleaching.png') },
-  { id: 'extensions', label: 'Hair Extensions', image: require('@/assets/salon/svc-extensions.png') },
-  { id: 'bridal', label: 'Bridal & Makeup', image: require('@/assets/salon/svc-bridal.png') },
-  { id: 'haircare2', label: 'Hair Care', image: require('@/assets/salon/svc-haircare.png') },
-];
 
 const facilities = ['Free Wifi', 'Steam Room', 'Car Parking', 'AC', 'Sanitized Tools'];
 
@@ -70,10 +51,53 @@ type SalonRoute = RouteProp<ClientStackParamList, 'SalonDetails'>;
 type Navigation = NativeStackNavigationProp<ClientStackParamList>;
 type SectionKey = 'services' | 'reviews' | 'about';
 
+function humanizeType(type?: string | null) {
+  if (!type) return 'Salon';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatTime(t?: string | null) {
+  if (!t) return null;
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr, 10);
+  if (Number.isNaN(h)) return null;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${mStr ?? '00'} ${ampm}`;
+}
+
+function isOpenNow(open?: string | null, close?: string | null, workingDays?: string[] | null) {
+  if (!open || !close) return null;
+  const now = new Date();
+  if (workingDays && workingDays.length) {
+    const today = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const days = workingDays.map((d) => d.toLowerCase());
+    if (!days.some((d) => today.startsWith(d) || d.startsWith(today.slice(0, 3)))) return false;
+  }
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return cur >= toMin(open) && cur <= toMin(close);
+}
+
+function priceText(value: number) {
+  return `₹${Math.round(value)}`;
+}
+
 export function SalonDetailsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<SalonRoute>();
-  const salon = route.params?.salon ?? lumiereBeautyStudio;
+  const routeSalon = route.params?.salon;
+  const salonId = routeSalon?.id;
+
+  const detailQuery = useSalonDetail(salonId);
+  const reviewsQuery = useSalonReviews(salonId);
+  const salon = detailQuery.data?.salon;
+  const services = detailQuery.data?.services ?? [];
+  const reviews = reviewsQuery.data?.reviews ?? [];
+
   const scrollRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<SectionKey>('services');
   const [sectionOffsets, setSectionOffsets] = useState<Record<SectionKey, number>>({
@@ -84,76 +108,118 @@ export function SalonDetailsScreen() {
 
   const handleTabPress = (section: SectionKey) => {
     setActiveTab(section);
-    scrollRef.current?.scrollTo({
-      animated: true,
-      y: Math.max(sectionOffsets[section] - 12, 0),
-    });
+    scrollRef.current?.scrollTo({ animated: true, y: Math.max(sectionOffsets[section] - 12, 0) });
   };
+
+  // Derived display values, falling back to whatever the list screen passed us.
+  const name = salon?.business_name ?? routeSalon?.name ?? 'Salon';
+  const coverImages = (salon?.cover_images?.filter(Boolean) ?? [])
+    .map((u) => resolveImageUrl(u))
+    .filter((u): u is string => !!u);
+  const heroUri = coverImages[0] ?? resolveImageUrl(salon?.logo_url) ?? routeSalon?.heroImage ?? null;
+  const heroSource: ImageSourcePropType = heroUri ? { uri: heroUri } : heroFallback;
+  const locationText =
+    [salon?.address, salon?.city, salon?.state].filter(Boolean).join(', ') ||
+    routeSalon?.location ||
+    'Location unavailable';
+  const ratingValue =
+    salon?.average_rating != null
+      ? Number(salon.average_rating).toFixed(1)
+      : routeSalon?.rating ?? 'New';
+  const reviewCount = salon?.total_reviews ?? routeSalon?.reviewCount ?? reviews.length;
+
+  if (detailQuery.isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (detailQuery.isError && !salon) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            {(detailQuery.error as any)?.message || 'Could not load this salon.'}
+          </Text>
+          <Pressable onPress={() => detailQuery.refetch()} style={styles.retryBtn}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.goBack()}>
+            <Text style={styles.backLink}>Go back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-        >
-          <SalonHero onBackPress={() => navigation.goBack()} />
-          <ThumbnailGallery />
-          <SalonInfo salon={salon} />
-          <OpeningPill />
+        <ScrollView contentContainerStyle={styles.content} ref={scrollRef} showsVerticalScrollIndicator={false}>
+          <SalonHero onBackPress={() => navigation.goBack()} source={heroSource} />
+          {coverImages.length > 1 ? <ThumbnailGallery images={coverImages} /> : null}
+
+          <SalonInfo name={name} category={humanizeType(salon?.salon_type)} location={locationText} rating={ratingValue} reviewCount={reviewCount} distanceKm={salon?.distance_km ?? null} />
+
+          <OpeningPill
+            openTime={salon?.opening_time}
+            closeTime={salon?.closing_time}
+            workingDays={salon?.working_days}
+          />
           <ActionButtons />
           <DetailTabs activeTab={activeTab} onTabPress={handleTabPress} />
 
           <View
-            onLayout={(event) => {
-              const { y } = event.nativeEvent.layout;
-
-              setSectionOffsets((prev) => ({ ...prev, services: y }));
+            onLayout={(e) => {
+              const y = e.nativeEvent.layout.y;
+              setSectionOffsets((p) => ({ ...p, services: y }));
             }}
           >
-            <ServiceGrid />
+            <ServiceList services={services} />
           </View>
 
           <FacilitiesList />
 
           <View
-            onLayout={(event) => {
-              const { y } = event.nativeEvent.layout;
-
-              setSectionOffsets((prev) => ({ ...prev, reviews: y }));
+            onLayout={(e) => {
+              const y = e.nativeEvent.layout.y;
+              setSectionOffsets((p) => ({ ...p, reviews: y }));
             }}
           >
-            <ReviewsSection />
+            <ReviewsSection
+              reviews={reviews}
+              loading={reviewsQuery.isLoading}
+              rating={ratingValue}
+              count={reviewCount}
+            />
           </View>
 
           <View
-            onLayout={(event) => {
-              const { y } = event.nativeEvent.layout;
-
-              setSectionOffsets((prev) => ({ ...prev, about: y }));
+            onLayout={(e) => {
+              const y = e.nativeEvent.layout.y;
+              setSectionOffsets((p) => ({ ...p, about: y }));
             }}
           >
-            <AboutSection />
+            <AboutSection name={name} description={salon?.description} />
           </View>
 
-          <LocationCard />
+          <LocationCard name={name} location={locationText} />
         </ScrollView>
 
-        <StickyBookButton
-          onPress={() =>
-            navigation.navigate('SalonServices', { salonName: salon.name })
-          }
-        />
+        <StickyBookButton onPress={() => navigation.navigate('SalonServices', { salonName: name })} />
       </View>
     </SafeAreaView>
   );
 }
 
-function SalonHero({ onBackPress }: { onBackPress: () => void }) {
+function SalonHero({ onBackPress, source }: { onBackPress: () => void; source: ImageSourcePropType }) {
   return (
     <View style={styles.heroWrap}>
-      <Image source={heroImg} style={styles.heroImage} />
+      <Image source={source} style={styles.heroImage} />
       <View style={styles.heroOverlay} />
       <Pressable onPress={onBackPress} style={styles.heroBackButton}>
         <Ionicons color={colors.white} name="arrow-back" size={22} />
@@ -162,22 +228,19 @@ function SalonHero({ onBackPress }: { onBackPress: () => void }) {
   );
 }
 
-function ThumbnailGallery() {
+function ThumbnailGallery({ images }: { images: string[] }) {
+  const shown = images.slice(0, 5);
+  const extra = images.length - shown.length;
   return (
-    <ScrollView
-      contentContainerStyle={styles.thumbnailRow}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-    >
-      {gallery.map((thumb, index) => {
-        const isLast = index === gallery.length - 1;
-
+    <ScrollView contentContainerStyle={styles.thumbnailRow} horizontal showsHorizontalScrollIndicator={false}>
+      {shown.map((uri, index) => {
+        const isLast = index === shown.length - 1 && extra > 0;
         return (
           <View key={`thumb-${index}`} style={styles.thumbnailWrap}>
-            <Image source={thumb} style={styles.thumbnail} />
+            <Image source={{ uri }} style={styles.thumbnail} />
             {isLast ? (
               <View style={styles.thumbnailOverlay}>
-                <Text style={styles.thumbnailOverlayText}>+12 More</Text>
+                <Text style={styles.thumbnailOverlayText}>+{extra} More</Text>
               </View>
             ) : null}
           </View>
@@ -187,13 +250,27 @@ function ThumbnailGallery() {
   );
 }
 
-function SalonInfo({ salon }: { salon: SalonRouteData }) {
+function SalonInfo({
+  name,
+  category,
+  location,
+  rating,
+  reviewCount,
+  distanceKm,
+}: {
+  name: string;
+  category: string;
+  location: string;
+  rating: string;
+  reviewCount: number;
+  distanceKm: number | null;
+}) {
   return (
     <View style={styles.sectionCard}>
       <View style={styles.infoRow}>
         <View style={styles.infoTextWrap}>
-          <Text style={styles.salonName}>{salon.name || 'Looks Salon'}</Text>
-          <Text style={styles.salonCategory}>{salon.category || 'Unisex'}</Text>
+          <Text style={styles.salonName}>{name}</Text>
+          <Text style={styles.salonCategory}>{category}</Text>
         </View>
 
         <View style={styles.infoIcons}>
@@ -208,29 +285,51 @@ function SalonInfo({ salon }: { salon: SalonRouteData }) {
 
       <View style={styles.metaLine}>
         <Ionicons color={colors.goldDark} name="location-sharp" size={15} />
-        <Text style={styles.metaLineText}>{salon.location || 'Zoaharabagh 4/250B'}</Text>
+        <Text style={styles.metaLineText}>{location}</Text>
       </View>
 
       <View style={styles.metaLine}>
         <Ionicons color={colors.goldDark} name="star" size={15} />
         <Text style={styles.metaLineText}>
-          {salon.rating} ({salon.reviewCount || 120} Reviews) • {salon.distance || '0.8 miles away'}
+          {rating} ({reviewCount} {reviewCount === 1 ? 'Review' : 'Reviews'})
+          {distanceKm != null ? ` • ${distanceKm.toFixed(1)} km away` : ''}
         </Text>
       </View>
     </View>
   );
 }
 
-function OpeningPill() {
+function OpeningPill({
+  openTime,
+  closeTime,
+  workingDays,
+}: {
+  openTime?: string | null;
+  closeTime?: string | null;
+  workingDays?: string[] | null;
+}) {
+  const open = formatTime(openTime);
+  const close = formatTime(closeTime);
+  const openNow = isOpenNow(openTime, closeTime, workingDays);
+
+  if (!open || !close) {
+    return (
+      <View style={styles.openingPill}>
+        <Text style={styles.openingText}>Opening hours not available</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.openingPill}>
       <View style={styles.openingLeft}>
-        <View style={styles.openingCheck}>
-          <Ionicons color={colors.white} name="checkmark" size={15} />
+        <View style={[styles.openingCheck, openNow === false && styles.openingClosed]}>
+          <Ionicons color={colors.white} name={openNow === false ? 'close' : 'checkmark'} size={15} />
         </View>
-        <Text style={styles.openingText}>Open now | 10:00 AM - 09:00 PM</Text>
+        <Text style={styles.openingText}>
+          {openNow === false ? 'Closed now' : 'Open now'} | {open} - {close}
+        </Text>
       </View>
-      <Ionicons color={colors.muted} name="chevron-down" size={18} />
     </View>
   );
 }
@@ -242,7 +341,6 @@ function ActionButtons() {
         <Ionicons color={colors.goldDark} name="navigate" size={18} />
         <Text style={styles.actionButtonText}>Get Directions</Text>
       </Pressable>
-
       <Pressable style={styles.actionButton}>
         <Ionicons color={colors.goldDark} name="call-outline" size={18} />
         <Text style={styles.actionButtonText}>Call Salon</Text>
@@ -268,7 +366,6 @@ function DetailTabs({
     <View style={styles.tabsWrap}>
       {tabs.map((tab) => {
         const isActive = tab.key === activeTab;
-
         return (
           <Pressable
             key={tab.key}
@@ -283,20 +380,40 @@ function DetailTabs({
   );
 }
 
-function ServiceGrid() {
+function ServiceList({ services }: { services: SalonService[] }) {
   return (
     <View style={styles.block}>
       <Text style={styles.blockTitle}>Services</Text>
-      <View style={styles.serviceGrid}>
-        {serviceItems.map((item) => (
-          <View key={item.id} style={styles.serviceItem}>
-            <View style={styles.serviceTileWrap}>
-              <Image source={item.image} style={styles.serviceTileImage} />
-            </View>
-            <Text style={styles.serviceLabel}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
+      {services.length === 0 ? (
+        <Text style={styles.emptyText}>No services listed yet.</Text>
+      ) : (
+        <View style={styles.serviceList}>
+          {services.map((svc) => {
+            const hasDiscount = svc.discounted_price != null && svc.discounted_price < svc.price;
+            return (
+              <View key={svc.id} style={styles.serviceRow}>
+                <View style={styles.serviceRowLeft}>
+                  <Text style={styles.serviceRowName}>{svc.name}</Text>
+                  {svc.description ? (
+                    <Text numberOfLines={2} style={styles.serviceRowDesc}>
+                      {svc.description}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.serviceRowDuration}>{svc.duration_minutes} min</Text>
+                </View>
+                <View style={styles.serviceRowPrice}>
+                  {hasDiscount ? (
+                    <Text style={styles.serviceStrike}>{priceText(svc.price)}</Text>
+                  ) : null}
+                  <Text style={styles.servicePrice}>
+                    {priceText(hasDiscount ? (svc.discounted_price as number) : svc.price)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -317,107 +434,119 @@ function FacilitiesList() {
   );
 }
 
-function ReviewsSection() {
+function ReviewsSection({
+  reviews,
+  loading,
+  rating,
+  count,
+}: {
+  reviews: SalonReview[];
+  loading: boolean;
+  rating: string;
+  count: number;
+}) {
   return (
     <View style={styles.block}>
       <Text style={styles.blockTitle}>Reviews & Ratings</Text>
-      <RatingSummary />
-      <View style={styles.reviewFilterRow}>
-        <View style={[styles.reviewFilterChip, styles.reviewFilterChipActive]}>
-          <Text style={[styles.reviewFilterText, styles.reviewFilterTextActive]}>All Reviews</Text>
+      <View style={styles.ratingCard}>
+        <View>
+          <Text style={styles.ratingValue}>{rating} ★</Text>
+          <Text style={styles.ratingMeta}>
+            Based on {count} {count === 1 ? 'review' : 'reviews'}
+          </Text>
         </View>
-        <View style={styles.reviewFilterChip}>
-          <Text style={styles.reviewFilterText}>Hair Styling</Text>
-        </View>
-        <View style={styles.reviewFilterChip}>
-          <Text style={styles.reviewFilterText}>Coloring</Text>
-        </View>
+        <Pressable style={styles.writeReviewButton}>
+          <Text style={styles.writeReviewText}>Write Review</Text>
+        </Pressable>
       </View>
-      <ReviewCard />
+
+      {loading ? (
+        <ActivityIndicator color={colors.gold} style={{ marginTop: 16 }} />
+      ) : reviews.length === 0 ? (
+        <Text style={styles.emptyText}>No reviews yet. Be the first to review!</Text>
+      ) : (
+        reviews.map((review) => <ReviewCard key={review.id} review={review} />)
+      )}
     </View>
   );
 }
 
-function RatingSummary() {
-  return (
-    <View style={styles.ratingCard}>
-      <View>
-        <Text style={styles.ratingValue}>4.8 ★</Text>
-        <Text style={styles.ratingMeta}>Based on 124 reviews</Text>
-      </View>
-      <Pressable style={styles.writeReviewButton}>
-        <Text style={styles.writeReviewText}>Write Review</Text>
-      </Pressable>
-    </View>
-  );
+function timeAgo(iso: string) {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const days = Math.floor((Date.now() - then) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return '1 day ago';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? '1 month ago' : `${months} months ago`;
 }
 
-function ReviewCard() {
+function ReviewCard({ review }: { review: SalonReview }) {
+  const stars = '★'.repeat(Math.round(review.rating)).padEnd(5, '☆');
+  const initial = review.customer_name?.trim()?.[0]?.toUpperCase() ?? '?';
   return (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
         <View style={styles.reviewUser}>
           <View style={styles.avatarCircle}>
-            <Image source={avatarEleanor} style={styles.avatarImage} />
+            <Text style={styles.avatarInitial}>{initial}</Text>
           </View>
           <View>
-            <Text style={styles.reviewName}>Eleanor Vance</Text>
-            <Text style={styles.reviewTime}>2 days ago</Text>
+            <Text style={styles.reviewName}>{review.customer_name}</Text>
+            <Text style={styles.reviewTime}>{timeAgo(review.created_at)}</Text>
           </View>
         </View>
-        <Text style={styles.reviewStars}>★★★★★</Text>
+        <Text style={styles.reviewStars}>{stars}</Text>
       </View>
 
-      <View style={styles.reviewMetaRow}>
-        <View style={styles.verifiedBadge}>
-          <Text style={styles.verifiedBadgeText}>Verified Customer</Text>
+      {(review.is_verified || review.service_name) ? (
+        <View style={styles.reviewMetaRow}>
+          {review.is_verified ? (
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedBadgeText}>Verified Customer</Text>
+            </View>
+          ) : null}
+          {review.service_name ? (
+            <View style={styles.serviceReviewChip}>
+              <Text style={styles.serviceReviewChipText}>{review.service_name}</Text>
+            </View>
+          ) : null}
         </View>
-        <View style={styles.serviceReviewChip}>
-          <Text style={styles.serviceReviewChipText}>Balayage Retouch</Text>
+      ) : null}
+
+      {review.comment ? <Text style={styles.reviewCopy}>{review.comment}</Text> : null}
+
+      {review.vendor_response ? (
+        <View style={styles.vendorResponse}>
+          <Text style={styles.vendorResponseLabel}>Response from salon</Text>
+          <Text style={styles.vendorResponseText}>{review.vendor_response}</Text>
         </View>
-      </View>
-
-      <Text style={styles.reviewCopy}>
-        Absolutely breathtaking experience. The atmosphere here is unlike any other salon in the
-        city, it feels like stepping into a tranquil oasis. Sarah understood exactly what I wanted
-        with my color, achieving a perfect sunkissed look without any damage. The scalp massage
-        during the wash was heavenly.
-      </Text>
-
-      <View style={styles.reviewImagesRow}>
-        <Image source={review1} style={styles.reviewImage} />
-        <Image source={review2} style={styles.reviewImage} />
-      </View>
+      ) : null}
     </View>
   );
 }
 
-function AboutSection() {
+function AboutSection({ name, description }: { name: string; description?: string | null }) {
   return (
     <View style={styles.block}>
-      <Text style={styles.blockTitle}>About Looks Salon</Text>
+      <Text style={styles.blockTitle}>About {name}</Text>
       <Text style={styles.aboutCopy}>
-        Established in 1989, Looks Salon has grown to become one of the most reputable premium
-        salon chains in the region. Our heritage is built on a foundation of exceptional
-        craftsmanship and a commitment to providing a luxurious, transformative experience for
-        every guest. We pride ourselves on staying ahead of global trends while maintaining the
-        personalized touch that defines our premium quality standards.
+        {description?.trim() || 'No description provided for this salon yet.'}
       </Text>
     </View>
   );
 }
 
-function LocationCard() {
+function LocationCard({ name, location }: { name: string; location: string }) {
   return (
     <View style={[styles.block, styles.locationCard]}>
       <Text style={styles.blockTitle}>Location</Text>
       <View style={styles.metaLine}>
         <Ionicons color={colors.goldDark} name="location-sharp" size={15} />
         <View style={styles.locationTextWrap}>
-          <Text style={styles.locationBranch}>Zoaharabagh Branch</Text>
-          <Text style={styles.locationAddress}>
-            4/250B, Main Market Road, Zoaharabagh District, Pin: 110001
-          </Text>
+          <Text style={styles.locationBranch}>{name}</Text>
+          <Text style={styles.locationAddress}>{location}</Text>
         </View>
       </View>
 
@@ -448,6 +577,35 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
+  },
+  center: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 16,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  errorText: {
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryText: {
+    color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  backLink: {
+    color: colors.subtle,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
   content: {
     paddingBottom: 132,
@@ -505,6 +663,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     paddingHorizontal: 16,
+    paddingTop: 14,
   },
   infoRow: {
     alignItems: 'flex-start',
@@ -552,6 +711,7 @@ const styles = StyleSheet.create({
   },
   metaLineText: {
     color: colors.muted,
+    flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 20,
@@ -582,6 +742,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
     width: 24,
+  },
+  openingClosed: {
+    backgroundColor: '#9CA3AF',
   },
   openingText: {
     color: colors.text,
@@ -658,47 +821,60 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     marginBottom: 14,
   },
-  serviceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 16,
-  },
-  serviceItem: {
-    width: '23%',
-  },
-  serviceTileWrap: {
-    borderColor: 'transparent',
-    borderRadius: 18,
-    borderWidth: 2,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  serviceTileSelected: {
-    borderColor: colors.gold,
-  },
-  serviceTileImage: {
-    height: 76,
-    width: '100%',
-  },
-  serviceSelectedBadge: {
-    alignItems: 'center',
-    backgroundColor: colors.gold,
-    borderRadius: 10,
-    height: 20,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 6,
-    top: 6,
-    width: 20,
-  },
-  serviceLabel: {
-    color: colors.text,
+  emptyText: {
+    color: colors.subtle,
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 13.75,
-    marginTop: 8,
-    textAlign: 'center',
+    fontSize: 14,
+    paddingVertical: 8,
+  },
+  serviceList: {
+    gap: 12,
+  },
+  serviceRow: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  serviceRowLeft: {
+    flex: 1,
+    gap: 3,
+    paddingRight: 12,
+  },
+  serviceRowName: {
+    color: colors.text,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+  },
+  serviceRowDesc: {
+    color: colors.subtle,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  serviceRowDuration: {
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  serviceRowPrice: {
+    alignItems: 'flex-end',
+  },
+  serviceStrike: {
+    color: colors.subtle,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    textDecorationLine: 'line-through',
+  },
+  servicePrice: {
+    color: colors.text,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
   },
   facilitiesGrid: {
     flexDirection: 'row',
@@ -751,31 +927,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
   },
-  reviewFilterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 14,
-  },
-  reviewFilterChip: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  reviewFilterChipActive: {
-    borderColor: colors.gold,
-  },
-  reviewFilterText: {
-    color: colors.muted,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12.5,
-  },
-  reviewFilterTextActive: {
-    color: colors.goldDark,
-  },
   reviewCard: {
     backgroundColor: colors.surfaceStrong,
     borderColor: colors.border,
@@ -803,9 +954,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: 44,
   },
-  avatarImage: {
-    height: '100%',
-    width: '100%',
+  avatarInitial: {
+    color: colors.white,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 18,
   },
   reviewName: {
     color: colors.text,
@@ -857,15 +1009,23 @@ const styles = StyleSheet.create({
     lineHeight: 22.75,
     marginTop: 14,
   },
-  reviewImagesRow: {
-    flexDirection: 'row',
-    gap: 10,
+  vendorResponse: {
+    backgroundColor: colors.action,
+    borderRadius: 12,
     marginTop: 14,
+    padding: 12,
   },
-  reviewImage: {
-    borderRadius: 14,
-    height: 86,
-    width: 86,
+  vendorResponseLabel: {
+    color: colors.goldDark,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  vendorResponseText: {
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
   },
   aboutCopy: {
     color: colors.muted,

@@ -12,9 +12,8 @@ import type {
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
-import { useAuth } from '@/store/AuthContext';
-import { useLogout } from '@/services/api/hooks/useAuthAPI';
 
+const avatar = require('@/assets/home/avatar.png');
 const topLumina = require('@/assets/home/top-lumina.png');
 const topAura = require('@/assets/home/top-aura.png');
 const nearbyGlow = require('@/assets/home/nearby-glow.png');
@@ -97,25 +96,13 @@ export function ClientAccountScreen() {
   const navigation = useNavigation<SavedNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const [tab, setTab] = useState<Tab>('salons');
-  
-  const { signOut } = useAuth();
-  const { mutate: logoutUser } = useLogout();
-
-  const handleLogout = () => {
-    logoutUser(undefined, {
-      onSettled: () => {
-        signOut();
-      }
-    });
-  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Saved</Text>
-        <Pressable onPress={handleLogout} style={styles.logoutBtn}>
-          <Ionicons color={colors.text} name="log-out-outline" size={20} />
-          <Text style={styles.logoutText}>Log out</Text>
+        <Pressable hitSlop={8} onPress={() => parent?.navigate('Profile')}>
+          <Image source={avatar} style={styles.avatar} />
         </Pressable>
       </View>
 
@@ -239,15 +226,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: -0.2,
   },
-  logoutBtn: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  logoutText: {
-    color: colors.text,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
+  avatar: {
+    borderColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 40,
+    width: 40,
   },
   segment: {
     backgroundColor: colors.segmentBg,

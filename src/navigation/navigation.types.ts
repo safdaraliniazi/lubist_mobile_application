@@ -27,12 +27,15 @@ export type AuthStackParamList = {
     phone: string;
     countryCode: string;
     verificationId: string;
-    isSignup?: boolean;
-    signupData?: any;
+    // 'login' = existing verified customer, 'signup' = new number (account created after OTP)
+    mode: 'login' | 'signup';
+    customerName?: string;
   };
   Signup: {
-    phone?: string;
-    countryCode?: string;
+    phone: string;
+    countryCode: string;
+    // Issued by /auth/signup/phone/verify-otp; proves the phone was just verified.
+    verificationToken: string;
   };
   EmailLogin: undefined;
   ForgotPassword: undefined;
@@ -54,6 +57,7 @@ export type ClientTabParamList = {
 
 export type ClientStackParamList = {
   Tabs: undefined;
+  Profile: undefined;
   SalonDetails: {
     salon?: SalonRouteData;
   };

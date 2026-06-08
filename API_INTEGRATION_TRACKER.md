@@ -30,9 +30,9 @@
 
 | Domain | Total | Integrated (🟢/✅) | Mobile priority |
 |--------|------:|------------------:|-----------------|
-| Auth | 16 | 9 | 🔴 High |
-| Location | 3 | 0 | 🔴 High |
-| Salons (public) | 16 | 0 | 🔴 High |
+| Auth | 16 | 13 | 🔴 High |
+| Location | 3 | 2 | 🔴 High |
+| Salons (public) | 16 | 5 | 🔴 High |
 | Bookings | 8 | 0 | 🔴 High |
 | Customers (cart/fav/reviews) | 23 | 0 | 🔴 High |
 | Products | 8 | 0 | 🔴 High |
@@ -43,9 +43,9 @@
 | Careers | 6 | 0 | 🟡 Low |
 | Upload | 6 | 0 | 🟠 Medium |
 | Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **9** | |
+| **TOTAL** | **170** | **20** | |
 
-**Overall: 9 / 170 endpoints integrated (~5%).**
+**Overall: 20 / 170 endpoints integrated (~12%).**
 
 ---
 
@@ -55,6 +55,7 @@
 |------|--------|--------------|
 | TanStack Query provider | ✅ | `src/app/providers/AppProviders.tsx` |
 | Base fetch client (`apiGet`/`apiPost`) | 🟢 | `src/services/api/client.ts` — **added auth headers, PUT/PATCH/DELETE helpers, and auto refresh-on-401** |
+| Device location (`expo-location`) | 🟢 | `src/services/location/useDeviceLocation.ts` — **GPS + permission flow, used by ClientHome** |
 | Auth token storage | 🟢 | `src/services/storage/tokenStorage.ts` — **using `expo-secure-store` persistence** |
 | AuthContext (real session) | 🟢 | `src/store/AuthContext.tsx` — **holds real token + user, auto-restores login on launch** |
 | Query key conventions | ⬜ | Define a `queryKeys` factory once we add `useQuery` reads |
@@ -74,10 +75,10 @@ File: `backend/app/api/auth.py` · Mobile hooks: `src/services/api/hooks/useAuth
 | POST | `/auth/login` | public | `useLogin` | EmailLoginScreen | 🟢 |
 | POST | `/auth/signup` | public | `useSignup` | OtpVerifyScreen | 🟢 |
 | POST | `/auth/refresh` | public | (auto via client) | — | 🟢 |
-| GET | `/auth/me` | bearer | `useGetUserProfile` | — | ⬜ |
-| PUT | `/auth/me` | bearer | `useUpdateUserProfile` | — | ⬜ |
-| POST | `/auth/logout` | bearer | `useLogout` | ClientAccountScreen | 🟢 |
-| POST | `/auth/logout-all` | bearer | `useLogoutAll` | — | ⬜ |
+| GET | `/auth/me` | bearer | `useGetUserProfile` | ProfileScreen | 🟢 |
+| PUT | `/auth/me` | bearer | `useUpdateUserProfile` | ProfileScreen | 🟢 |
+| POST | `/auth/logout` | bearer | `useLogout` | ProfileScreen | 🟢 |
+| POST | `/auth/logout-all` | bearer | `useLogoutAll` | ProfileScreen | 🟢 |
 | POST | `/auth/password-reset` | public | `usePasswordReset` | ForgotPasswordScreen | 🟢 |
 | POST | `/auth/password-reset/confirm` | public | `usePasswordResetConfirm` | — | ⬜ |
 | POST | `/auth/resend-verification` | public | `useResendVerification` | — | ⬜ |
@@ -96,8 +97,8 @@ File: `backend/app/api/location.py`
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
 | POST | `/location/geocode` | public | — | — | ⬜ |
-| GET | `/location/reverse-geocode` | public | — | — | ⬜ |
-| GET | `/location/salons/nearby` | public | — | ClientHome / Discover | ⬜ |
+| GET | `/location/reverse-geocode` | public | `useReverseGeocode` | ClientHome | 🟢 |
+| GET | `/location/salons/nearby` | public | `useNearbySalons` | ClientHome | 🟢 |
 
 ---
 
@@ -106,17 +107,17 @@ File: `backend/app/api/salons.py`
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| GET | `/salons/public` | public | — | ClientDiscover | ⬜ |
+| GET | `/salons/public` | public | `usePublicSalons` | ClientDiscover | 🟢 |
 | GET | `/salons/popular-cities` | public | — | ClientHome | ⬜ |
 | GET | `/salons/` | public | — | ClientDiscover | ⬜ |
-| GET | `/salons/{salon_id}` | public | — | SalonDetailsScreen | ⬜ |
-| GET | `/salons/{salon_id}/reviews` | public | — | SalonDetailsScreen | ⬜ |
+| GET | `/salons/{salon_id}` | public | `useSalonDetail` | SalonDetailsScreen | 🟢 |
+| GET | `/salons/{salon_id}/reviews` | public | `useSalonReviews` | SalonDetailsScreen | 🟢 |
 | GET | `/salons/{salon_id}/feedback` | public | — | — | ⬜ |
 | POST | `/salons/{salon_id}/feedback` | bearer | — | — | ⬜ |
-| GET | `/salons/{salon_id}/services` | public | — | SalonServicesScreen | ⬜ |
+| GET | `/salons/{salon_id}/services` | public | (via `useSalonDetail?include_services`) | SalonDetailsScreen | 🟢 |
 | GET | `/salons/{salon_id}/available-slots` | public | — | SelectTimeScreen | ⬜ |
 | GET | `/salons/search/nearby` | public | — | ClientDiscover | ⬜ |
-| GET | `/salons/search/query` | public | — | ClientDiscover | ⬜ |
+| GET | `/salons/search/query` | public | `useSearchSalons` | ClientDiscover | 🟢 |
 | POST | `/salons/` | bearer (vendor) | — | — | ⬜ |
 | PATCH | `/salons/{salon_id}` | bearer (vendor) | — | — | ⬜ |
 | POST | `/salons/{salon_id}/approve` | bearer (admin/rm) | — | — | ➖ |
@@ -359,4 +360,4 @@ Candidates we flagged for a possible `/api/v2` or backend tweaks to better serve
 
 ---
 
-_Last updated: 2026-06-06 · Maintained jointly by the team + Claude Code._
+_Last updated: 2026-06-08 · Maintained jointly by the team + Claude Code._

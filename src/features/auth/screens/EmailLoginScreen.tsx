@@ -160,7 +160,7 @@ export function EmailLoginScreen() {
 
               <View style={styles.signupRow}>
                 <Text style={styles.signupText}>New to Lubist? </Text>
-                <Pressable onPress={() => navigation.navigate('Signup', {})}>
+                <Pressable onPress={() => navigation.navigate('SignIn')}>
                   <Text style={styles.signupLink}>Create account</Text>
                 </Pressable>
               </View>

@@ -3,20 +3,35 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   auraWellness,
   luminaStudio,
-  lumiereBeautyStudio,
-  theGlowRoom,
 } from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
+import { useDeviceLocation } from '@/services/location/useDeviceLocation';
+import {
+  useNearbySalons,
+  useReverseGeocode,
+  type NearbySalon,
+} from '@/services/api/hooks/useLocationAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
 
 // Assets exported 1:1 from Figma ("HOmescreen").
 const avatar = require('@/assets/home/avatar.png');
@@ -97,9 +112,42 @@ export function ClientHomeScreen() {
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
   const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
 
+  const { coords, permission, loading: locLoading, refetch: refetchLocation } = useDeviceLocation();
+  const { data: geo } = useReverseGeocode(coords?.latitude ?? null, coords?.longitude ?? null);
+  const nearby = useNearbySalons({
+    lat: coords?.latitude ?? null,
+    lon: coords?.longitude ?? null,
+    radius: 15,
+    limit: 10,
+  });
+
+  const locationLabel = locLoading
+    ? 'Detecting your location…'
+    : permission === 'denied'
+      ? 'Location access is off'
+      : geo?.address || 'Location unavailable';
+
+  const openNearbySalon = (s: NearbySalon) => {
+    const distance = s.distance_km != null ? `${s.distance_km.toFixed(1)} km` : '';
+    openSalon({
+      id: s.id,
+      name: s.business_name,
+      location: [s.city, s.state].filter(Boolean).join(', '),
+      rating: s.average_rating != null ? String(s.average_rating) : 'New',
+      reviewCount: s.total_reviews ?? 0,
+      distance,
+      heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+    });
+  };
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <Header />
+      <Header
+        label={locationLabel}
+        denied={permission === 'denied'}
+        onPressLocation={refetchLocation}
+        onPressProfile={() => parent?.navigate('Profile')}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -120,7 +168,15 @@ export function ClientHomeScreen() {
         </ScrollView>
         <PaginationDots activeIndex={0} count={3} />
 
-        <NearYouSection onOpen={openSalon} />
+        <NearYouSection
+          salons={nearby.data?.salons ?? []}
+          loading={nearby.isLoading}
+          isError={nearby.isError}
+          hasLocation={coords != null}
+          denied={permission === 'denied'}
+          onEnableLocation={refetchLocation}
+          onOpen={openNearbySalon}
+        />
 
         <ServicesForYou />
 
@@ -132,24 +188,36 @@ export function ClientHomeScreen() {
   );
 }
 
-function Header() {
+function Header({
+  label,
+  denied,
+  onPressLocation,
+  onPressProfile,
+}: {
+  label: string;
+  denied: boolean;
+  onPressLocation: () => void;
+  onPressProfile: () => void;
+}) {
   return (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
+      <Pressable style={styles.headerLeft} onPress={onPressLocation}>
         <View style={styles.locationRow}>
-          <Ionicons color={colors.gold} name="location-sharp" size={18} />
-          <Text style={styles.homeTitle}>Home</Text>
-          <Ionicons color={colors.muted} name="chevron-down" size={16} />
+          <Ionicons color={colors.gold} name="location-sharp" size={13} />
+          <Text style={styles.locationLabel}>{denied ? 'LOCATION OFF' : 'YOUR LOCATION'}</Text>
+          <Ionicons color={colors.muted} name={denied ? 'refresh' : 'chevron-down'} size={13} />
         </View>
-        <Text style={styles.addressText}>123 Beauty Lane, Manhattan,{'\n'}NY</Text>
-      </View>
+        <Text numberOfLines={1} style={styles.addressText}>{label}</Text>
+      </Pressable>
 
       <View style={styles.headerActions}>
         <Pressable style={styles.offersButton}>
           <Ionicons color={colors.gold} name="pricetag-outline" size={14} />
           <Text style={styles.offersButtonText}>Offers</Text>
         </Pressable>
-        <Image source={avatar} style={styles.avatar} />
+        <Pressable hitSlop={8} onPress={onPressProfile}>
+          <Image source={avatar} style={styles.avatar} />
+        </Pressable>
       </View>
     </View>
   );
@@ -209,7 +277,83 @@ function OfferCard({ subtitle, title }: { subtitle: string; title: string }) {
   );
 }
 
-function NearYouSection({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
+function NearYouSection({
+  salons,
+  loading,
+  isError,
+  hasLocation,
+  denied,
+  onEnableLocation,
+  onOpen,
+}: {
+  salons: NearbySalon[];
+  loading: boolean;
+  isError: boolean;
+  hasLocation: boolean;
+  denied: boolean;
+  onEnableLocation: () => void;
+  onOpen: (salon: NearbySalon) => void;
+}) {
+  const fallbackImages = [nearbyLumiere, nearbyGlow];
+
+  const renderBody = () => {
+    if (denied || !hasLocation) {
+      return (
+        <Pressable onPress={onEnableLocation} style={styles.nearYouStateBox}>
+          <Ionicons color={colors.gold} name="location-outline" size={22} />
+          <Text style={styles.nearYouStateText}>
+            Turn on location to see salons near you.
+          </Text>
+          <Text style={styles.nearYouStateAction}>Enable location</Text>
+        </Pressable>
+      );
+    }
+    if (loading) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      );
+    }
+    if (isError) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>Couldn't load nearby salons.</Text>
+        </View>
+      );
+    }
+    if (salons.length === 0) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>No salons found near you yet.</Text>
+        </View>
+      );
+    }
+    return (
+      <ScrollView
+        contentContainerStyle={styles.nearYouRow}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {salons.map((salon, index) => {
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          return (
+            <NearYouCard
+              key={salon.id}
+              imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
+              location={[salon.city, salon.state].filter(Boolean).join(', ') || 'Nearby'}
+              name={salon.business_name}
+              onPress={() => onOpen(salon)}
+              pills={[salon.city].filter(Boolean) as string[]}
+              rating={salon.average_rating != null ? String(salon.average_rating) : 'New'}
+              timing={salon.distance_km != null ? `${salon.distance_km.toFixed(1)} km` : ''}
+            />
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -220,38 +364,13 @@ function NearYouSection({ onOpen }: { onOpen: (salon: SalonRouteData) => void })
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.nearYouRow}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        <NearYouCard
-          image={nearbyLumiere}
-          location="Dubai Marina"
-          name="Lumière Beauty Studio"
-          onPress={() => onOpen(lumiereBeautyStudio)}
-          pills={['Hair', 'Nails']}
-          rating="4.9"
-          timing="Avail now"
-        />
-        <NearYouCard
-          image={nearbyGlow}
-          location="JBR"
-          name="The Glow Room"
-          onPress={() => onOpen(theGlowRoom)}
-          pills={['Skin', 'Brows']}
-          rating="4.8"
-          timing="30 min wait"
-        />
-      </ScrollView>
-
-      <PaginationDots activeIndex={0} count={3} />
+      {renderBody()}
     </View>
   );
 }
 
 function NearYouCard({
-  image,
+  imageSource,
   location,
   name,
   onPress,
@@ -259,7 +378,7 @@ function NearYouCard({
   rating,
   timing,
 }: {
-  image: number;
+  imageSource: ImageSourcePropType;
   location: string;
   name: string;
   onPress: () => void;
@@ -270,7 +389,7 @@ function NearYouCard({
   return (
     <Pressable onPress={onPress} style={styles.nearYouCard}>
       <View style={styles.nearYouImageWrap}>
-        <Image source={image} style={styles.nearYouImage} />
+        <Image source={imageSource} style={styles.nearYouImage} />
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
           locations={[0, 0.5, 1]}
@@ -294,11 +413,15 @@ function NearYouCard({
               <Ionicons color={colors.onImage} name="location-outline" size={12} />
               <Text style={styles.nearYouMetaText}>{location}</Text>
             </View>
-            <View style={styles.nearYouMetaDivider} />
-            <View style={styles.nearYouMeta}>
-              <Ionicons color={colors.onImage} name="time-outline" size={12} />
-              <Text style={styles.nearYouMetaText}>{timing}</Text>
-            </View>
+            {timing ? (
+              <>
+                <View style={styles.nearYouMetaDivider} />
+                <View style={styles.nearYouMeta}>
+                  <Ionicons color={colors.onImage} name="navigate-outline" size={12} />
+                  <Text style={styles.nearYouMetaText}>{timing}</Text>
+                </View>
+              </>
+            ) : null}
           </View>
         </View>
       </View>
@@ -498,18 +621,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  homeTitle: {
-    color: colors.heading,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
+  locationLabel: {
+    color: colors.muted2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.8,
   },
   addressText: {
-    color: colors.text,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    letterSpacing: -0.45,
-    lineHeight: 15,
+    color: colors.heading,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 16,
+    letterSpacing: -0.2,
+    marginTop: 2,
   },
   headerActions: {
     alignItems: 'center',
@@ -696,6 +819,29 @@ const styles = StyleSheet.create({
   nearYouRow: {
     gap: 16,
     paddingRight: 8,
+  },
+  nearYouStateBox: {
+    alignItems: 'center',
+    backgroundColor: colors.cardCream,
+    borderColor: colors.apptBorder,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  nearYouStateText: {
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  nearYouStateAction: {
+    color: colors.gold,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
   nearYouCard: {
     gap: 12,
