@@ -316,6 +316,13 @@ export function ProfileScreen() {
             </View>
           ) : (
             <View style={styles.dangerZone}>
+              <Pressable onPress={() => navigation.navigate('MyReviews')} style={styles.linkRow}>
+                <View style={styles.linkLeft}>
+                  <Ionicons color={colors.gold} name="star-outline" size={18} />
+                  <Text style={styles.linkText}>My Reviews</Text>
+                </View>
+                <Ionicons color={colors.muted} name="chevron-forward" size={18} />
+              </Pressable>
               <Pressable onPress={handleLogout} style={styles.logoutBtn}>
                 <Ionicons color={colors.text} name="log-out-outline" size={18} />
                 <Text style={styles.logoutText}>Log out</Text>
@@ -506,6 +513,19 @@ const styles = StyleSheet.create({
   saveDisabled: { opacity: 0.55 },
   saveText: { color: colors.white, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   dangerZone: { gap: 12, marginTop: 32 },
+  linkRow: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+  },
+  linkLeft: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  linkText: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   logoutBtn: {
     alignItems: 'center',
     backgroundColor: colors.white,

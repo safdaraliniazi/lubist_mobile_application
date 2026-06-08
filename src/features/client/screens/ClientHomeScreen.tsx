@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -16,10 +17,6 @@ import {
 import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  auraWellness,
-  luminaStudio,
-} from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
@@ -31,7 +28,9 @@ import {
   useReverseGeocode,
   type NearbySalon,
 } from '@/services/api/hooks/useLocationAPI';
+import { usePublicSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 
 // Assets exported 1:1 from Figma ("HOmescreen").
 const avatar = require('@/assets/home/avatar.png');
@@ -121,6 +120,29 @@ export function ClientHomeScreen() {
     limit: 10,
   });
 
+  // Top salons: highest-rated public salons (rating, then review count).
+  const publicSalons = usePublicSalons({ limit: 50 });
+  const topSalons = useMemo(() => {
+    const list = publicSalons.data?.salons ?? [];
+    return [...list]
+      .sort(
+        (a, b) =>
+          (b.average_rating ?? 0) - (a.average_rating ?? 0) ||
+          (b.total_reviews ?? 0) - (a.total_reviews ?? 0),
+      )
+      .slice(0, 5);
+  }, [publicSalons.data]);
+
+  const openTopSalon = (s: Salon) =>
+    openSalon({
+      id: s.id,
+      name: s.business_name,
+      location: [s.city, s.state].filter(Boolean).join(', '),
+      rating: displayRating(s.average_rating, s.total_reviews).label,
+      reviewCount: s.total_reviews ?? 0,
+      heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+    });
+
   const locationLabel = locLoading
     ? 'Detecting your location…'
     : permission === 'denied'
@@ -133,7 +155,7 @@ export function ClientHomeScreen() {
       id: s.id,
       name: s.business_name,
       location: [s.city, s.state].filter(Boolean).join(', '),
-      rating: s.average_rating != null ? String(s.average_rating) : 'New',
+      rating: displayRating(s.average_rating, s.total_reviews).label,
       reviewCount: s.total_reviews ?? 0,
       distance,
       heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
@@ -182,7 +204,12 @@ export function ClientHomeScreen() {
 
         <BeautyEssentials onOpen={openCatalog} />
 
-        <TopRatedSalons onOpen={openSalon} />
+        <TopSalonsSection
+          salons={topSalons}
+          loading={publicSalons.isLoading}
+          isError={publicSalons.isError}
+          onOpen={openTopSalon}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -345,7 +372,7 @@ function NearYouSection({
               name={salon.business_name}
               onPress={() => onOpen(salon)}
               pills={[salon.city].filter(Boolean) as string[]}
-              rating={salon.average_rating != null ? String(salon.average_rating) : 'New'}
+              rating={displayRating(salon.average_rating, salon.total_reviews).label}
               timing={salon.distance_km != null ? `${salon.distance_km.toFixed(1)} km` : ''}
             />
           );
@@ -487,85 +514,132 @@ function BeautyEssentials({ onOpen }: { onOpen: (category: string) => void }) {
   );
 }
 
-function TopRatedSalons({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
+function TopSalonsSection({
+  salons,
+  loading,
+  isError,
+  onOpen,
+}: {
+  salons: Salon[];
+  loading: boolean;
+  isError: boolean;
+  onOpen: (salon: Salon) => void;
+}) {
+  const fallbackImages = [topLumina, topAura];
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      );
+    }
+    if (isError) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>Couldn't load top salons.</Text>
+        </View>
+      );
+    }
+    if (salons.length === 0) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>No salons available yet.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.topRatedList}>
+        {salons.map((salon, index) => {
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          const { hasRating, label } = displayRating(salon.average_rating, salon.total_reviews);
+          const chips = [
+            salon.salon_type ? salon.salon_type.replace(/_/g, ' ').toUpperCase() : null,
+            salon.city,
+          ].filter(Boolean) as string[];
+          return (
+            <TopSalonCard
+              key={salon.id}
+              chips={chips}
+              hasRating={hasRating}
+              imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
+              location={[salon.city, salon.state].filter(Boolean).join(', ') || 'Salon'}
+              name={salon.business_name}
+              onPress={() => onOpen(salon)}
+              rating={label}
+              reviews={salon.total_reviews ?? 0}
+            />
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, styles.topRatedHeading]}>TOP RATED SALONS</Text>
-
-      <View style={styles.topRatedList}>
-        <TopRatedCard
-          chips={['UNISEX', 'HAIR & SPA']}
-          image={topLumina}
-          location="Downtown Ave • 1.2 km"
-          name="Lumina Studio"
-          offer="40% OFF"
-          onPress={() => onOpen(luminaStudio)}
-          rating="5.0"
-        />
-        <TopRatedCard
-          chips={['UNISEX', 'MASSAGE']}
-          image={topAura}
-          location="Westside District • 2.5 km"
-          name="Aura Wellness"
-          offer="GIFT CARD DEAL"
-          onPress={() => onOpen(auraWellness)}
-          rating="4.9"
-        />
-      </View>
+      <Text style={[styles.sectionTitle, styles.topRatedHeading]}>TOP SALONS</Text>
+      {renderBody()}
     </View>
   );
 }
 
-function TopRatedCard({
+function TopSalonCard({
   chips,
-  image,
+  hasRating,
+  imageSource,
   location,
   name,
-  offer,
   onPress,
   rating,
+  reviews,
 }: {
   chips: string[];
-  image: number;
+  hasRating: boolean;
+  imageSource: ImageSourcePropType;
   location: string;
   name: string;
-  offer: string;
   onPress: () => void;
   rating: string;
+  reviews: number;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.topRatedCard}>
       <View style={styles.topRatedImageWrap}>
-        <Image source={image} style={styles.topRatedImage} />
-        <View style={styles.topRatedOffer}>
-          <Text style={styles.topRatedOfferText}>{offer}</Text>
-        </View>
-        <Pressable style={styles.topRatedFav}>
-          <Ionicons color={colors.heading} name="heart-outline" size={18} />
-        </Pressable>
+        <Image source={imageSource} style={styles.topRatedImage} />
+        {hasRating ? (
+          <View style={styles.topRatedOffer}>
+            <Text style={styles.topRatedOfferText}>★ {rating}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.topRatedContent}>
         <View style={styles.topRatedTitleRow}>
-          <Text style={styles.topRatedName}>{name}</Text>
+          <Text numberOfLines={1} style={styles.topRatedName}>{name}</Text>
           <View style={styles.topRatedRating}>
             <Ionicons color={colors.gold} name="star" size={12} />
-            <Text style={styles.topRatedRatingText}>{rating}</Text>
+            <Text style={styles.topRatedRatingText}>
+              {rating}
+              {hasRating && reviews > 0 ? ` (${reviews})` : ''}
+            </Text>
           </View>
         </View>
         <View style={styles.topRatedMeta}>
           <Ionicons color={colors.text} name="location-outline" size={14} />
-          <Text style={styles.topRatedMetaText}>{location}</Text>
+          <Text numberOfLines={1} style={styles.topRatedMetaText}>{location}</Text>
         </View>
-        <View style={styles.topRatedChips}>
-          {chips.map((chip, index) => (
-            <View key={chip} style={styles.topRatedChip}>
-              <Text style={[styles.topRatedChipText, index === 0 && styles.topRatedChipUnisex]}>
-                {chip}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {chips.length ? (
+          <View style={styles.topRatedChips}>
+            {chips.map((chip, index) => (
+              <View key={chip} style={styles.topRatedChip}>
+                <Text style={[styles.topRatedChipText, index === 0 && styles.topRatedChipUnisex]}>
+                  {chip}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );

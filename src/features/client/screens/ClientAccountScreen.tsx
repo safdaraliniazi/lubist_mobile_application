@@ -18,6 +18,7 @@ import {
   type FavoriteItem,
 } from '@/services/api/hooks/useCustomerAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 
 const avatar = require('@/assets/home/avatar.png');
 const fallbackSalon = require('@/assets/home/top-lumina.png');
@@ -79,7 +80,7 @@ export function ClientAccountScreen() {
         id: favoriteSalonId(s) ?? '',
         name: s.business_name ?? 'Salon',
         location: salonLocation(s),
-        rating: s.average_rating != null ? String(s.average_rating) : 'New',
+        rating: displayRating(s.average_rating, s.total_reviews).label,
         reviewCount: s.total_reviews ?? 0,
         heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
       },
@@ -151,7 +152,7 @@ export function ClientAccountScreen() {
                   <View style={styles.salonRating}>
                     <Ionicons color={colors.gold} name="star" size={12} />
                     <Text style={styles.salonRatingText}>
-                      {salon.average_rating != null ? Number(salon.average_rating).toFixed(1) : 'New'}
+                      {displayRating(salon.average_rating, salon.total_reviews).label}
                     </Text>
                   </View>
                 </View>

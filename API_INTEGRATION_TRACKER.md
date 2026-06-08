@@ -30,11 +30,11 @@
 
 | Domain | Total | Integrated (🟢/✅) | Mobile priority |
 |--------|------:|------------------:|-----------------|
-| Auth | 16 | 13 | 🔴 High |
+| Auth | 16 | 12 | 🔴 High |
 | Location | 3 | 2 | 🔴 High |
 | Salons (public) | 16 | 6 | 🔴 High |
 | Bookings | 8 | 0 | 🔴 High |
-| Customers (cart/fav/reviews) | 23 | 9 | 🔴 High |
+| Customers (cart/fav/reviews) | 23 | 14 | 🔴 High |
 | Products | 8 | 0 | 🔴 High |
 | Product Orders | 4 | 0 | 🔴 High |
 | Payments | 8 | 1 | 🟠 Medium |
@@ -43,9 +43,9 @@
 | Careers | 6 | 0 | 🟡 Low |
 | Upload | 6 | 0 | 🟠 Medium |
 | Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **31** | |
+| **TOTAL** | **170** | **35** | |
 
-**Overall: 31 / 170 endpoints integrated (~18%).**
+**Overall: 35 / 170 endpoints integrated (~21%).**
 
 ---
 
@@ -152,9 +152,9 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 |--------|------|------|------|--------|--------|
 | GET | `/customers/cart` | bearer | `useCart` | SalonServices / SelectTime / Checkout | 🟢 |
 | POST | `/customers/cart` | bearer | `useAddToCart` | SalonServices | 🟢 |
-| PUT | `/customers/cart/{item_id}` | bearer | `useUpdateCartItem` | (hook ready) | 🟡 |
-| DELETE | `/customers/cart/{item_id}` | bearer | `useRemoveCartItem` | SalonServices | 🟢 |
-| DELETE | `/customers/cart/clear/all` | bearer | `useClearCart` | (hook ready) | 🟡 |
+| PUT | `/customers/cart/{item_id}` | bearer | `useUpdateCartItem` | CheckoutScreen (qty stepper) | 🟢 |
+| DELETE | `/customers/cart/{item_id}` | bearer | `useRemoveCartItem` | SalonServices / Checkout | 🟢 |
+| DELETE | `/customers/cart/clear/all` | bearer | `useClearCart` | CheckoutScreen (Clear all) | 🟢 |
 | POST | `/customers/cart/checkout` | bearer | `useCheckoutCart` | CheckoutScreen | 🟢 |
 | GET | `/customers/product-cart` | bearer | — | ClientShopping | ⬜ |
 | POST | `/customers/product-cart` | bearer | — | ProductDetail | ⬜ |
@@ -164,15 +164,20 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 | GET | `/customers/bookings/my-bookings` | bearer | `useMyBookings` | ClientAppointments | 🟢 |
 | PUT | `/customers/bookings/{booking_id}/cancel` | bearer | `useCancelBooking` | ClientAppointments | 🟢 |
 | POST | `/customers/bookings` | bearer | — | (cart/checkout used instead) | ➖ |
-| GET | `/customers/salons` | bearer | — | ClientDiscover | ⬜ |
-| GET | `/customers/salons/search` | bearer | — | ClientDiscover | ⬜ |
-| GET | `/customers/salons/{salon_id}` | bearer | — | SalonDetails | ⬜ |
+| GET | `/customers/salons` | bearer | — | ClientDiscover | ➖ (use public `/salons/public`) |
+| GET | `/customers/salons/search` | bearer | — | ClientDiscover | ➖ (use public `/salons/search/query`) |
+| GET | `/customers/salons/{salon_id}` | bearer | — | SalonDetails | ➖ (use public `/salons/{id}`) |
 | GET | `/customers/favorites` | bearer | `useFavorites` | SalonDetails | 🟢 |
 | POST | `/customers/favorites` | bearer | `useAddFavorite` | SalonDetails | 🟢 |
 | DELETE | `/customers/favorites/{salon_id}` | bearer | `useRemoveFavorite` | SalonDetails | 🟢 |
-| GET | `/customers/reviews/my-reviews` | bearer | — | ClientAccount | ⬜ |
-| POST | `/customers/reviews` | bearer | — | SalonDetails | ⬜ |
-| PUT | `/customers/reviews/{review_id}` | bearer | — | — | ⬜ |
+| GET | `/customers/reviews/my-reviews` | bearer | `useMyReviews` | MyReviewsScreen (via Profile) | 🟢 |
+| POST | `/customers/reviews` | bearer | `useCreateReview` | ClientAppointments + SalonDetails (needs a completed booking) | 🟢 |
+| PUT | `/customers/reviews/{review_id}` | bearer | `useUpdateReview` | MyReviewsScreen (edit) | 🟢 |
+
+> **Service cart / favorites / reviews / browse are complete.** The 5 `product-cart/*` rows
+> stay ⬜ on purpose — they depend on the Products catalog (not yet integrated) and will be
+> wired as part of the **Products** rollout. Browse (`/customers/salons*`) is ➖ because the
+> public `/salons/*` endpoints already cover it.
 
 ---
 
@@ -361,4 +366,4 @@ Candidates we flagged for a possible `/api/v2` or backend tweaks to better serve
 
 ---
 
-_Last updated: 2026-06-08 · Maintained jointly by the team + Claude Code._
+_Last updated: 2026-06-08 (Customers domain completed: reviews wired + cart edit/clear + browse marked ➖ → 35/170) · Maintained jointly by the team + Claude Code._

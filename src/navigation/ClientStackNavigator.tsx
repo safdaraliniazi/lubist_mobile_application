@@ -10,6 +10,7 @@ import { ProductCatalogScreen } from '@/features/client/screens/ProductCatalogSc
 import { ProductDetailScreen } from '@/features/client/screens/ProductDetailScreen';
 import { CartScreen } from '@/features/client/screens/CartScreen';
 import { ProfileScreen } from '@/features/client/screens/ProfileScreen';
+import { MyReviewsScreen } from '@/features/client/screens/MyReviewsScreen';
 
 import { ClientStackParamList } from './navigation.types';
 
@@ -28,6 +29,7 @@ export function ClientStackNavigator() {
       <Stack.Screen component={ProductCatalogScreen} name="ProductCatalog" />
       <Stack.Screen component={ProductDetailScreen} name="ProductDetail" />
       <Stack.Screen component={CartScreen} name="Cart" />
+      <Stack.Screen component={MyReviewsScreen} name="MyReviews" />
     </Stack.Navigator>
   );
 }

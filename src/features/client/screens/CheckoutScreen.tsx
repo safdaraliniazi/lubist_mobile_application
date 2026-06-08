@@ -11,6 +11,9 @@ import {
   useCart,
   useCreateCartOrder,
   useCheckoutCart,
+  useUpdateCartItem,
+  useRemoveCartItem,
+  useClearCart,
   type RazorpayOrder,
 } from '@/services/api/hooks/useBookingAPI';
 import { RazorpayCheckout, type RazorpaySuccess } from '@/features/client/components/RazorpayCheckout';
@@ -52,6 +55,9 @@ export function CheckoutScreen() {
   const cart = useCart();
   const { mutate: createOrder, isPending: isCreatingOrder } = useCreateCartOrder();
   const { mutate: checkout, isPending: isCheckingOut } = useCheckoutCart();
+  const { mutate: updateCartItem, isPending: isUpdatingItem } = useUpdateCartItem();
+  const { mutate: removeCartItem, isPending: isRemovingItem } = useRemoveCartItem();
+  const { mutate: clearCart, isPending: isClearingCart } = useClearCart();
 
   const [order, setOrder] = useState<RazorpayOrder | null>(null);
   const [payVisible, setPayVisible] = useState(false);
@@ -59,7 +65,37 @@ export function CheckoutScreen() {
   const items = cart.data?.items ?? [];
   const serviceTotal = cart.data?.total_amount ?? 0;
   const displaySalon = salonName ?? cart.data?.salon_name ?? 'Salon';
+  const cartBusy = isUpdatingItem || isRemovingItem || isClearingCart;
   const busy = isCreatingOrder || isCheckingOut;
+
+  const changeQty = (itemId: string, current: number, delta: number) => {
+    const next = current + delta;
+    if (next < 1) {
+      removeCartItem(itemId, {
+        onError: (err: any) => Alert.alert('Error', err.message || 'Could not update cart.'),
+      });
+      return;
+    }
+    updateCartItem(
+      { itemId, quantity: next },
+      { onError: (err: any) => Alert.alert('Error', err.message || 'Could not update cart.') },
+    );
+  };
+
+  const confirmClear = () => {
+    Alert.alert('Clear cart', 'Remove all services from your cart?', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () =>
+          clearCart(undefined, {
+            onSuccess: () => navigation.goBack(),
+            onError: (err: any) => Alert.alert('Error', err.message || 'Could not clear cart.'),
+          }),
+      },
+    ]);
+  };
 
   const startPayment = () => {
     createOrder(undefined, {
@@ -127,15 +163,52 @@ export function CheckoutScreen() {
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.sectionTitle}>YOUR SERVICES</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>YOUR SERVICES</Text>
+            {items.length > 0 ? (
+              <Pressable disabled={cartBusy} hitSlop={8} onPress={confirmClear}>
+                <Text style={styles.clearText}>Clear all</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.priceCard}>
             {items.map((item) => (
-              <View key={item.id} style={styles.priceRow}>
-                <Text numberOfLines={1} style={styles.priceLabel}>
-                  {item.service_details?.name ?? 'Service'}
-                  {item.quantity > 1 ? ` × ${item.quantity}` : ''}
-                </Text>
-                <Text style={styles.priceValue}>{priceText(item.line_total)}</Text>
+              <View key={item.id} style={styles.serviceRow}>
+                <View style={styles.serviceInfo}>
+                  <Text numberOfLines={1} style={styles.priceLabel}>
+                    {item.service_details?.name ?? 'Service'}
+                  </Text>
+                  <Text style={styles.priceValue}>{priceText(item.line_total)}</Text>
+                </View>
+                <View style={styles.serviceControls}>
+                  <View style={styles.stepper}>
+                    <Pressable
+                      disabled={cartBusy}
+                      hitSlop={4}
+                      onPress={() => changeQty(item.id, item.quantity, -1)}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons color={colors.heading} name="remove" size={14} />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{item.quantity}</Text>
+                    <Pressable
+                      disabled={cartBusy}
+                      hitSlop={4}
+                      onPress={() => changeQty(item.id, item.quantity, 1)}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons color={colors.heading} name="add" size={14} />
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    disabled={cartBusy}
+                    hitSlop={6}
+                    onPress={() => removeCartItem(item.id)}
+                    style={styles.removeBtn}
+                  >
+                    <Ionicons color={colors.muted} name="trash-outline" size={16} />
+                  </Pressable>
+                </View>
               </View>
             ))}
             <View style={styles.priceDivider} />
@@ -250,11 +323,27 @@ const styles = StyleSheet.create({
   },
   datePillText: { color: colors.heading, fontFamily: 'Inter_500Medium', fontSize: 13 },
   block: { gap: 16 },
-  sectionTitle: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 14, letterSpacing: 1.4, paddingHorizontal: 4 },
+  sectionHeaderRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  sectionTitle: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 14, letterSpacing: 1.4 },
+  clearText: { color: colors.gold, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   priceCard: { backgroundColor: colors.card, borderRadius: 8, gap: 12, padding: 16 },
   priceRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   priceLabel: { color: colors.text, flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, paddingRight: 12 },
   priceValue: { color: colors.heading, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  serviceRow: { gap: 8 },
+  serviceInfo: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  serviceControls: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  stepper: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.divider,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+  },
+  stepperBtn: { paddingHorizontal: 10, paddingVertical: 5 },
+  stepperValue: { color: colors.heading, fontFamily: 'Inter_500Medium', fontSize: 14, minWidth: 20, textAlign: 'center' },
+  removeBtn: { padding: 4 },
   priceDivider: { backgroundColor: colors.divider, height: 1 },
   totalLabel: { color: colors.heading, fontFamily: 'Montserrat_600SemiBold', fontSize: 18, letterSpacing: -0.2 },
   totalValue: { color: colors.gold, fontFamily: 'Montserrat_600SemiBold', fontSize: 18, letterSpacing: -0.2 },

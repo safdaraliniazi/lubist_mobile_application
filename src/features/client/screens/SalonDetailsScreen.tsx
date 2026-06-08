@@ -29,9 +29,13 @@ import {
   useFavorites,
   useAddFavorite,
   useRemoveFavorite,
+  useCreateReview,
   favoriteSalonId,
 } from '@/services/api/hooks/useCustomerAPI';
+import { useMyBookings } from '@/services/api/hooks/useBookingAPI';
+import { ReviewModal } from '@/features/client/components/ReviewModal';
 import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 
 const colors = {
   background: '#FFFAF5',
@@ -116,6 +120,50 @@ export function SalonDetailsScreen() {
   const { mutate: removeFavorite } = useRemoveFavorite();
   const isFavorite = !!favoritesQuery.data?.favorites?.some((f) => favoriteSalonId(f) === salonId);
 
+  // Reviews require a completed booking at this salon (verified-review system).
+  const canReview = isAuthenticated && !user?.guest && !!salonId;
+  const bookingsQuery = useMyBookings();
+  const { mutate: createReview, isPending: isSubmittingReview } = useCreateReview();
+  const [reviewVisible, setReviewVisible] = useState(false);
+
+  const reviewableBooking = useMemo(() => {
+    if (!canReview) return undefined;
+    return (bookingsQuery.data?.data ?? []).find(
+      (b) => b.salon_id === salonId && b.status?.toLowerCase() === 'completed',
+    );
+  }, [bookingsQuery.data, canReview, salonId]);
+
+  const handleWriteReview = () => {
+    if (!canReview) {
+      Alert.alert('Sign in required', 'Please sign in to write a review.');
+      return;
+    }
+    if (!reviewableBooking) {
+      Alert.alert(
+        'Visit first',
+        'You can write a review after a completed booking at this salon.',
+      );
+      return;
+    }
+    setReviewVisible(true);
+  };
+
+  const submitReview = ({ rating, comment }: { rating: number; comment: string }) => {
+    if (!reviewableBooking || !salonId) return;
+    createReview(
+      { salon_id: salonId, booking_id: reviewableBooking.id, rating, comment },
+      {
+        onSuccess: () => {
+          setReviewVisible(false);
+          reviewsQuery.refetch();
+          Alert.alert('Thank you!', 'Your review has been submitted.');
+        },
+        onError: (err: any) =>
+          Alert.alert('Could not submit', err.message || 'Please try again later.'),
+      },
+    );
+  };
+
   // Distinct service categories (for the detail page we show categories, not
   // the full service list — the "Book Services" button opens the full list).
   const categories = useMemo(() => {
@@ -152,11 +200,8 @@ export function SalonDetailsScreen() {
     [salon?.address, salon?.city, salon?.state].filter(Boolean).join(', ') ||
     routeSalon?.location ||
     'Location unavailable';
-  const ratingValue =
-    salon?.average_rating != null
-      ? Number(salon.average_rating).toFixed(1)
-      : routeSalon?.rating ?? 'New';
   const reviewCount = salon?.total_reviews ?? routeSalon?.reviewCount ?? reviews.length;
+  const ratingValue = displayRating(salon?.average_rating, reviewCount).label;
 
   const handleCall = () => {
     if (salon?.phone) {
@@ -268,6 +313,7 @@ export function SalonDetailsScreen() {
               loading={reviewsQuery.isLoading}
               rating={ratingValue}
               count={reviewCount}
+              onWriteReview={handleWriteReview}
             />
           </View>
 
@@ -285,6 +331,14 @@ export function SalonDetailsScreen() {
 
         <StickyBookButton onPress={openBooking} />
       </View>
+
+      <ReviewModal
+        visible={reviewVisible}
+        salonName={name}
+        submitting={isSubmittingReview}
+        onSubmit={submitReview}
+        onDismiss={() => setReviewVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -532,11 +586,13 @@ function ReviewsSection({
   loading,
   rating,
   count,
+  onWriteReview,
 }: {
   reviews: SalonReview[];
   loading: boolean;
   rating: string;
   count: number;
+  onWriteReview: () => void;
 }) {
   return (
     <View style={styles.block}>
@@ -548,7 +604,7 @@ function ReviewsSection({
             Based on {count} {count === 1 ? 'review' : 'reviews'}
           </Text>
         </View>
-        <Pressable style={styles.writeReviewButton}>
+        <Pressable onPress={onWriteReview} style={styles.writeReviewButton}>
           <Text style={styles.writeReviewText}>Write Review</Text>
         </Pressable>
       </View>

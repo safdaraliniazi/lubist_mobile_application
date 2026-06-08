@@ -88,6 +88,7 @@ export type ClientStackParamList = {
     productName?: string;
   };
   Cart: undefined;
+  MyReviews: undefined;
 };
 
 export type AdminStackParamList = {

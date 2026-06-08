@@ -25,6 +25,7 @@ import type {
 } from '@/navigation/navigation.types';
 import { usePublicSalons, useSearchSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 
 // Local fallbacks when a salon has no logo / cover image (exported 1:1 from Figma).
@@ -101,7 +102,7 @@ export function ClientDiscoverScreen() {
       id: s.id,
       name: s.business_name,
       location: salonLocation(s),
-      rating: s.average_rating != null ? String(s.average_rating) : 'New',
+      rating: displayRating(s.average_rating, s.total_reviews).label,
       reviewCount: s.total_reviews ?? 0,
       heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
     };
@@ -159,7 +160,7 @@ export function ClientDiscoverScreen() {
                     name={salon.business_name}
                     offer={salon.has_discount ? 'OFFER' : undefined}
                     onPress={() => openSalon(salon)}
-                    rating={salon.average_rating != null ? String(salon.average_rating) : 'New'}
+                    rating={displayRating(salon.average_rating, salon.total_reviews).label}
                   />
                 );
               })}

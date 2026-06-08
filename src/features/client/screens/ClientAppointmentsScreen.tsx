@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList, ClientTabParamList } from '@/navigation/navigation.types';
 import { useMyBookings, useCancelBooking, type Booking } from '@/services/api/hooks/useBookingAPI';
+import { useCreateReview } from '@/services/api/hooks/useCustomerAPI';
+import { ReviewModal } from '@/features/client/components/ReviewModal';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 
 const fallbackThumb = require('@/assets/home/top-lumina.png');
@@ -68,6 +70,9 @@ export function ClientAppointmentsScreen() {
 
   const { data, isLoading, isError, refetch } = useMyBookings();
   const { mutate: cancelBooking, isPending: isCancelling } = useCancelBooking();
+  const { mutate: createReview, isPending: isSubmittingReview } = useCreateReview();
+
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
 
   const todayYMD = toYMD(new Date());
   const { upcoming, past } = useMemo(() => {
@@ -88,6 +93,21 @@ export function ClientAppointmentsScreen() {
     parent?.navigate('SalonDetails', {
       salon: { id: b.salon_id, name: b.salon_name ?? 'Salon', location: '', rating: 'New' },
     });
+
+  const submitReview = ({ rating, comment }: { rating: number; comment: string }) => {
+    if (!reviewBooking) return;
+    createReview(
+      { salon_id: reviewBooking.salon_id, booking_id: reviewBooking.id, rating, comment },
+      {
+        onSuccess: () => {
+          setReviewBooking(null);
+          Alert.alert('Thank you!', 'Your review has been submitted.');
+        },
+        onError: (err: any) =>
+          Alert.alert('Could not submit', err.message || 'Please try again later.'),
+      },
+    );
+  };
 
   const confirmCancel = (b: Booking) => {
     Alert.alert('Cancel booking', `Cancel your booking ${b.booking_number}? This can't be undone.`, [
@@ -149,6 +169,7 @@ export function ClientAppointmentsScreen() {
               const ss = statusStyle(booking.status);
               const logo = resolveImageUrl(booking.salon_logo_url);
               const canCancel = tab === 'upcoming';
+              const isCompleted = booking.status?.toLowerCase() === 'completed';
               return (
                 <View key={booking.id} style={styles.card}>
                   <View style={styles.cardTop}>
@@ -182,6 +203,14 @@ export function ClientAppointmentsScreen() {
                       >
                         <Text style={styles.actionOutlineText}>Cancel</Text>
                       </Pressable>
+                    ) : isCompleted ? (
+                      <Pressable
+                        onPress={() => setReviewBooking(booking)}
+                        style={[styles.actionBtn, styles.actionOutline]}
+                      >
+                        <Ionicons color={colors.text} name="star-outline" size={15} />
+                        <Text style={styles.actionOutlineText}>Write Review</Text>
+                      </Pressable>
                     ) : null}
                     <Pressable
                       onPress={() => openSalon(booking)}
@@ -198,6 +227,14 @@ export function ClientAppointmentsScreen() {
           </View>
         )}
       </ScrollView>
+
+      <ReviewModal
+        visible={reviewBooking != null}
+        salonName={reviewBooking?.salon_name ?? 'Salon'}
+        submitting={isSubmittingReview}
+        onSubmit={submitReview}
+        onDismiss={() => setReviewBooking(null)}
+      />
     </SafeAreaView>
   );
 }
