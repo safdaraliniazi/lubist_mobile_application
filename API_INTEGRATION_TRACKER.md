@@ -34,7 +34,7 @@
 | Location | 3 | 2 | 🔴 High |
 | Salons (public) | 16 | 6 | 🔴 High |
 | Bookings | 8 | 0 | 🔴 High |
-| Customers (cart/fav/reviews) | 23 | 6 | 🔴 High |
+| Customers (cart/fav/reviews) | 23 | 9 | 🔴 High |
 | Products | 8 | 0 | 🔴 High |
 | Product Orders | 4 | 0 | 🔴 High |
 | Payments | 8 | 1 | 🟠 Medium |
@@ -43,9 +43,9 @@
 | Careers | 6 | 0 | 🟡 Low |
 | Upload | 6 | 0 | 🟠 Medium |
 | Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **28** | |
+| **TOTAL** | **170** | **31** | |
 
-**Overall: 28 / 170 endpoints integrated (~16%).**
+**Overall: 31 / 170 endpoints integrated (~18%).**
 
 ---
 
@@ -167,9 +167,9 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 | GET | `/customers/salons` | bearer | — | ClientDiscover | ⬜ |
 | GET | `/customers/salons/search` | bearer | — | ClientDiscover | ⬜ |
 | GET | `/customers/salons/{salon_id}` | bearer | — | SalonDetails | ⬜ |
-| GET | `/customers/favorites` | bearer | — | ClientAccount | ⬜ |
-| POST | `/customers/favorites` | bearer | — | SalonDetails | ⬜ |
-| DELETE | `/customers/favorites/{salon_id}` | bearer | — | SalonDetails | ⬜ |
+| GET | `/customers/favorites` | bearer | `useFavorites` | SalonDetails | 🟢 |
+| POST | `/customers/favorites` | bearer | `useAddFavorite` | SalonDetails | 🟢 |
+| DELETE | `/customers/favorites/{salon_id}` | bearer | `useRemoveFavorite` | SalonDetails | 🟢 |
 | GET | `/customers/reviews/my-reviews` | bearer | — | ClientAccount | ⬜ |
 | POST | `/customers/reviews` | bearer | — | SalonDetails | ⬜ |
 | PUT | `/customers/reviews/{review_id}` | bearer | — | — | ⬜ |

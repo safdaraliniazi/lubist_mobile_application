@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -15,12 +18,19 @@ import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { useAuth } from '@/store/AuthContext';
 import {
   useSalonDetail,
+  useSalonServices,
   useSalonReviews,
-  type SalonService,
   type SalonReview,
 } from '@/services/api/hooks/useSalonsAPI';
+import {
+  useFavorites,
+  useAddFavorite,
+  useRemoveFavorite,
+  favoriteSalonId,
+} from '@/services/api/hooks/useCustomerAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 
 const colors = {
@@ -92,11 +102,31 @@ export function SalonDetailsScreen() {
   const routeSalon = route.params?.salon;
   const salonId = routeSalon?.id;
 
+  const { isAuthenticated, user } = useAuth();
+  const canFavorite = isAuthenticated && !user?.guest && !!salonId;
+
   const detailQuery = useSalonDetail(salonId);
+  const servicesQuery = useSalonServices(salonId);
   const reviewsQuery = useSalonReviews(salonId);
   const salon = detailQuery.data?.salon;
-  const services = detailQuery.data?.services ?? [];
   const reviews = reviewsQuery.data?.reviews ?? [];
+
+  const favoritesQuery = useFavorites(canFavorite);
+  const { mutate: addFavorite } = useAddFavorite();
+  const { mutate: removeFavorite } = useRemoveFavorite();
+  const isFavorite = !!favoritesQuery.data?.favorites?.some((f) => favoriteSalonId(f) === salonId);
+
+  // Distinct service categories (for the detail page we show categories, not
+  // the full service list — the "Book Services" button opens the full list).
+  const categories = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; icon_url?: string | null }>();
+    for (const s of servicesQuery.data?.services ?? []) {
+      const c = s.taxonomy?.category;
+      if (!c?.id || map.has(c.id)) continue;
+      map.set(c.id, { id: c.id, name: c.name, icon_url: c.icon_url });
+    }
+    return Array.from(map.values());
+  }, [servicesQuery.data]);
 
   const scrollRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<SectionKey>('services');
@@ -127,6 +157,39 @@ export function SalonDetailsScreen() {
       ? Number(salon.average_rating).toFixed(1)
       : routeSalon?.rating ?? 'New';
   const reviewCount = salon?.total_reviews ?? routeSalon?.reviewCount ?? reviews.length;
+
+  const handleCall = () => {
+    if (salon?.phone) {
+      Linking.openURL(`tel:${salon.phone}`).catch(() => Alert.alert('Error', 'Unable to open the dialer.'));
+    } else {
+      Alert.alert('No phone number', 'This salon has not listed a phone number.');
+    }
+  };
+
+  const handleDirections = () => {
+    const hasCoords = salon?.latitude != null && salon?.longitude != null;
+    const query = hasCoords ? `${salon!.latitude},${salon!.longitude}` : encodeURIComponent(locationText);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() =>
+      Alert.alert('Error', 'Unable to open Maps.'),
+    );
+  };
+
+  const handleShare = () => {
+    Share.share({ message: `Check out ${name} on Lubist — ${locationText}` }).catch(() => {});
+  };
+
+  const handleToggleFavorite = () => {
+    if (!canFavorite) {
+      Alert.alert('Sign in required', 'Log in to save salons to your favorites.');
+      return;
+    }
+    const onError = (err: any) => Alert.alert('Error', err.message || 'Could not update favorite.');
+    if (isFavorite) removeFavorite(salonId, { onError });
+    else addFavorite(salonId, { onError });
+  };
+
+  const openBooking = () =>
+    salonId ? navigation.navigate('SalonServices', { salonId, salonName: name }) : navigation.goBack();
 
   if (detailQuery.isLoading) {
     return (
@@ -163,14 +226,24 @@ export function SalonDetailsScreen() {
           <SalonHero onBackPress={() => navigation.goBack()} source={heroSource} />
           {coverImages.length > 1 ? <ThumbnailGallery images={coverImages} /> : null}
 
-          <SalonInfo name={name} category={humanizeType(salon?.salon_type)} location={locationText} rating={ratingValue} reviewCount={reviewCount} distanceKm={salon?.distance_km ?? null} />
+          <SalonInfo
+            name={name}
+            category={humanizeType(salon?.salon_type)}
+            location={locationText}
+            rating={ratingValue}
+            reviewCount={reviewCount}
+            distanceKm={salon?.distance_km ?? null}
+            isFavorite={isFavorite}
+            onToggleFavorite={handleToggleFavorite}
+            onShare={handleShare}
+          />
 
           <OpeningPill
             openTime={salon?.opening_time}
             closeTime={salon?.closing_time}
             workingDays={salon?.working_days}
           />
-          <ActionButtons />
+          <ActionButtons onCall={handleCall} onDirections={handleDirections} />
           <DetailTabs activeTab={activeTab} onTabPress={handleTabPress} />
 
           <View
@@ -179,7 +252,7 @@ export function SalonDetailsScreen() {
               setSectionOffsets((p) => ({ ...p, services: y }));
             }}
           >
-            <ServiceList services={services} />
+            <CategoryGrid categories={categories} loading={servicesQuery.isLoading} onBook={openBooking} />
           </View>
 
           <FacilitiesList />
@@ -210,13 +283,7 @@ export function SalonDetailsScreen() {
           <LocationCard name={name} location={locationText} />
         </ScrollView>
 
-        <StickyBookButton
-          onPress={() =>
-            salonId
-              ? navigation.navigate('SalonServices', { salonId, salonName: name })
-              : navigation.goBack()
-          }
-        />
+        <StickyBookButton onPress={openBooking} />
       </View>
     </SafeAreaView>
   );
@@ -263,6 +330,9 @@ function SalonInfo({
   rating,
   reviewCount,
   distanceKm,
+  isFavorite,
+  onToggleFavorite,
+  onShare,
 }: {
   name: string;
   category: string;
@@ -270,6 +340,9 @@ function SalonInfo({
   rating: string;
   reviewCount: number;
   distanceKm: number | null;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  onShare: () => void;
 }) {
   return (
     <View style={styles.sectionCard}>
@@ -280,10 +353,14 @@ function SalonInfo({
         </View>
 
         <View style={styles.infoIcons}>
-          <Pressable style={styles.infoIconButton}>
-            <Ionicons color={colors.goldDark} name="heart-outline" size={20} />
+          <Pressable onPress={onToggleFavorite} style={[styles.infoIconButton, isFavorite && styles.infoIconButtonActive]}>
+            <Ionicons
+              color={isFavorite ? colors.white : colors.goldDark}
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={20}
+            />
           </Pressable>
-          <Pressable style={styles.infoIconButton}>
+          <Pressable onPress={onShare} style={styles.infoIconButton}>
             <Ionicons color={colors.goldDark} name="share-social-outline" size={20} />
           </Pressable>
         </View>
@@ -340,14 +417,14 @@ function OpeningPill({
   );
 }
 
-function ActionButtons() {
+function ActionButtons({ onCall, onDirections }: { onCall: () => void; onDirections: () => void }) {
   return (
     <View style={styles.actionRow}>
-      <Pressable style={styles.actionButton}>
+      <Pressable onPress={onDirections} style={styles.actionButton}>
         <Ionicons color={colors.goldDark} name="navigate" size={18} />
         <Text style={styles.actionButtonText}>Get Directions</Text>
       </Pressable>
-      <Pressable style={styles.actionButton}>
+      <Pressable onPress={onCall} style={styles.actionButton}>
         <Ionicons color={colors.goldDark} name="call-outline" size={18} />
         <Text style={styles.actionButtonText}>Call Salon</Text>
       </Pressable>
@@ -386,36 +463,46 @@ function DetailTabs({
   );
 }
 
-function ServiceList({ services }: { services: SalonService[] }) {
+function CategoryGrid({
+  categories,
+  loading,
+  onBook,
+}: {
+  categories: { id: string; name: string; icon_url?: string | null }[];
+  loading: boolean;
+  onBook: () => void;
+}) {
   return (
     <View style={styles.block}>
-      <Text style={styles.blockTitle}>Services</Text>
-      {services.length === 0 ? (
+      <View style={styles.servicesHeaderRow}>
+        <Text style={styles.blockTitle}>Services</Text>
+        <Pressable onPress={onBook} style={styles.viewAllBtn}>
+          <Text style={styles.viewAllText}>Book Services</Text>
+          <Ionicons color={colors.goldDark} name="arrow-forward" size={14} />
+        </Pressable>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={colors.gold} style={{ paddingVertical: 16 }} />
+      ) : categories.length === 0 ? (
         <Text style={styles.emptyText}>No services listed yet.</Text>
       ) : (
-        <View style={styles.serviceList}>
-          {services.map((svc) => {
-            const hasDiscount = svc.discounted_price != null && svc.discounted_price < svc.price;
+        <View style={styles.categoryGrid}>
+          {categories.map((cat) => {
+            const icon = resolveImageUrl(cat.icon_url);
             return (
-              <View key={svc.id} style={styles.serviceRow}>
-                <View style={styles.serviceRowLeft}>
-                  <Text style={styles.serviceRowName}>{svc.name}</Text>
-                  {svc.description ? (
-                    <Text numberOfLines={2} style={styles.serviceRowDesc}>
-                      {svc.description}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.serviceRowDuration}>{svc.duration_minutes} min</Text>
+              <Pressable key={cat.id} onPress={onBook} style={styles.categoryItem}>
+                <View style={styles.categoryTile}>
+                  {icon ? (
+                    <Image source={{ uri: icon }} style={styles.categoryTileImage} />
+                  ) : (
+                    <Ionicons color={colors.goldDark} name="sparkles-outline" size={26} />
+                  )}
                 </View>
-                <View style={styles.serviceRowPrice}>
-                  {hasDiscount ? (
-                    <Text style={styles.serviceStrike}>{priceText(svc.price)}</Text>
-                  ) : null}
-                  <Text style={styles.servicePrice}>
-                    {priceText(hasDiscount ? (svc.discounted_price as number) : svc.price)}
-                  </Text>
-                </View>
-              </View>
+                <Text numberOfLines={1} style={styles.categoryLabel}>
+                  {cat.name}
+                </Text>
+              </Pressable>
             );
           })}
         </View>
@@ -709,6 +796,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 36,
   },
+  infoIconButtonActive: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  servicesHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  viewAllBtn: { alignItems: 'center', flexDirection: 'row', gap: 4 },
+  viewAllText: { color: colors.goldDark, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
+  categoryItem: { alignItems: 'center', gap: 8, width: '25%' },
+  categoryTile: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    height: 64,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 64,
+  },
+  categoryTileImage: { height: '100%', width: '100%' },
+  categoryLabel: { color: colors.muted, fontFamily: 'Inter_400Regular', fontSize: 11, textAlign: 'center' },
   metaLine: {
     alignItems: 'center',
     flexDirection: 'row',

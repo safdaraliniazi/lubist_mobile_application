@@ -3,23 +3,38 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auraWellness, luminaStudio, theGlowRoom } from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
-  SalonRouteData,
 } from '@/navigation/navigation.types';
+import { useAuth } from '@/store/AuthContext';
+import {
+  useFavorites,
+  useRemoveFavorite,
+  favoriteSalonId,
+  type FavoriteItem,
+} from '@/services/api/hooks/useCustomerAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
 
 const avatar = require('@/assets/home/avatar.png');
-const topLumina = require('@/assets/home/top-lumina.png');
-const topAura = require('@/assets/home/top-aura.png');
-const nearbyGlow = require('@/assets/home/nearby-glow.png');
+const fallbackSalon = require('@/assets/home/top-lumina.png');
 const loreal = require('@/assets/catalog/loreal.png');
 const olaplex = require('@/assets/catalog/olaplex.png');
 const moroccanoil = require('@/assets/catalog/moroccanoil.png');
+
+// Placeholder until a product-favorites endpoint exists.
+type SavedProduct = { id: string; brand: string; desc: string; size: string; price: string; image: number };
+const savedProducts: SavedProduct[] = [
+  { id: 'sp1', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
+  { id: 'sp2', brand: 'Olaplex', desc: 'No. 4 Bond Maintenance', size: '250ml', price: '₹2950', image: olaplex },
+  { id: 'sp3', brand: 'Moroccanoil', desc: 'Hydrating Shampoo', size: '500ml', price: '₹1850', image: moroccanoil },
+  { id: 'sp4', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
+];
+
+type Tab = 'salons' | 'products';
 
 const colors = {
   bg: '#FFFAF5',
@@ -41,61 +56,125 @@ const colors = {
   segmentBg: '#F0E0D1',
 };
 
-type SavedSalon = {
-  id: string;
-  data: SalonRouteData;
-  image: number;
-  location: string;
-  chips: string[];
-};
-
-const savedSalons: SavedSalon[] = [
-  {
-    id: 'sv1',
-    data: luminaStudio,
-    image: topLumina,
-    location: 'Downtown Ave • 1.2 km',
-    chips: ['UNISEX', 'HAIR & SPA'],
-  },
-  {
-    id: 'sv2',
-    data: auraWellness,
-    image: topAura,
-    location: 'Westside District • 2.5 km',
-    chips: ['UNISEX', 'MASSAGE'],
-  },
-  {
-    id: 'sv3',
-    data: theGlowRoom,
-    image: nearbyGlow,
-    location: 'Park Lane • 3.1 km',
-    chips: ['UNISEX', 'SKIN'],
-  },
-];
-
-type SavedProduct = {
-  id: string;
-  brand: string;
-  desc: string;
-  size: string;
-  price: string;
-  image: number;
-};
-
-const savedProducts: SavedProduct[] = [
-  { id: 'sp1', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-  { id: 'sp2', brand: 'Olaplex', desc: 'No. 4 Bond Maintenance', size: '250ml', price: '₹2950', image: olaplex },
-  { id: 'sp3', brand: 'Moroccanoil', desc: 'Hydrating Shampoo', size: '500ml', price: '₹1850', image: moroccanoil },
-  { id: 'sp4', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-];
-
-type Tab = 'salons' | 'products';
 type SavedNavigation = BottomTabNavigationProp<ClientTabParamList>;
+
+function salonLocation(s: FavoriteItem) {
+  return [s.city, s.state].filter(Boolean).join(', ') || 'Salon';
+}
 
 export function ClientAccountScreen() {
   const navigation = useNavigation<SavedNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const { isAuthenticated, user } = useAuth();
+  const canFavorite = isAuthenticated && !user?.guest;
   const [tab, setTab] = useState<Tab>('salons');
+
+  const favoritesQuery = useFavorites(canFavorite);
+  const { mutate: removeFavorite, isPending: isRemoving } = useRemoveFavorite();
+  const favorites = favoritesQuery.data?.favorites ?? [];
+
+  const openSalon = (s: FavoriteItem) =>
+    parent?.navigate('SalonDetails', {
+      salon: {
+        id: favoriteSalonId(s) ?? '',
+        name: s.business_name ?? 'Salon',
+        location: salonLocation(s),
+        rating: s.average_rating != null ? String(s.average_rating) : 'New',
+        reviewCount: s.total_reviews ?? 0,
+        heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+      },
+    });
+
+  const renderBody = () => {
+    if (!canFavorite) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="heart-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>Sign in to see your saved salons</Text>
+          <Pressable onPress={() => parent?.navigate('Profile')} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Go to Profile</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favoritesQuery.isLoading) {
+      return (
+        <View style={styles.state}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      );
+    }
+    if (favoritesQuery.isError) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateSubtitle}>Couldn't load your saved salons.</Text>
+          <Pressable onPress={() => favoritesQuery.refetch()} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favorites.length === 0) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="heart-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>No saved salons yet</Text>
+          <Text style={styles.stateSubtitle}>Tap the heart on a salon to save it here.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.salonList}>
+        {favorites.map((salon) => {
+          const id = favoriteSalonId(salon) ?? '';
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          return (
+            <Pressable key={id} onPress={() => openSalon(salon)} style={styles.salonCard}>
+              <View style={styles.salonImageWrap}>
+                <Image source={remote ? { uri: remote } : fallbackSalon} style={styles.salonImage} />
+                <Pressable
+                  disabled={isRemoving}
+                  hitSlop={8}
+                  onPress={() => removeFavorite(id)}
+                  style={styles.salonFav}
+                >
+                  <Ionicons color={colors.gold} name="heart" size={18} />
+                </Pressable>
+              </View>
+              <View style={styles.salonContent}>
+                <View style={styles.salonTitleRow}>
+                  <Text style={styles.salonName}>{salon.business_name ?? 'Salon'}</Text>
+                  <View style={styles.salonRating}>
+                    <Ionicons color={colors.gold} name="star" size={12} />
+                    <Text style={styles.salonRatingText}>
+                      {salon.average_rating != null ? Number(salon.average_rating).toFixed(1) : 'New'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.salonMeta}>
+                  <Ionicons color={colors.text} name="location-outline" size={14} />
+                  <Text style={styles.salonMetaText}>{salonLocation(salon)}</Text>
+                </View>
+                {salon.salon_type ? (
+                  <View style={styles.salonChips}>
+                    <View style={styles.salonChip}>
+                      <Text style={styles.salonChipText}>
+                        {salon.salon_type.replace(/_/g, ' ').toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -111,70 +190,21 @@ export function ClientAccountScreen() {
           onPress={() => setTab('salons')}
           style={[styles.segmentButton, tab === 'salons' && styles.segmentActive]}
         >
-          <Ionicons
-            color={tab === 'salons' ? colors.white : colors.text}
-            name="heart"
-            size={14}
-          />
-          <Text style={[styles.segmentText, tab === 'salons' && styles.segmentTextActive]}>
-            Salons
-          </Text>
+          <Ionicons color={tab === 'salons' ? colors.white : colors.text} name="heart" size={14} />
+          <Text style={[styles.segmentText, tab === 'salons' && styles.segmentTextActive]}>Salons</Text>
         </Pressable>
         <Pressable
           onPress={() => setTab('products')}
           style={[styles.segmentButton, tab === 'products' && styles.segmentActive]}
         >
-          <Ionicons
-            color={tab === 'products' ? colors.white : colors.text}
-            name="bag-handle"
-            size={14}
-          />
-          <Text style={[styles.segmentText, tab === 'products' && styles.segmentTextActive]}>
-            Products
-          </Text>
+          <Ionicons color={tab === 'products' ? colors.white : colors.text} name="bag-handle" size={14} />
+          <Text style={[styles.segmentText, tab === 'products' && styles.segmentTextActive]}>Products</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {tab === 'salons' ? (
-          <View style={styles.salonList}>
-            {savedSalons.map((salon) => (
-              <Pressable
-                key={salon.id}
-                onPress={() => parent?.navigate('SalonDetails', { salon: salon.data })}
-                style={styles.salonCard}
-              >
-                <View style={styles.salonImageWrap}>
-                  <Image source={salon.image} style={styles.salonImage} />
-                  <View style={styles.salonFav}>
-                    <Ionicons color={colors.gold} name="heart" size={18} />
-                  </View>
-                </View>
-                <View style={styles.salonContent}>
-                  <View style={styles.salonTitleRow}>
-                    <Text style={styles.salonName}>{salon.data.name}</Text>
-                    <View style={styles.salonRating}>
-                      <Ionicons color={colors.gold} name="star" size={12} />
-                      <Text style={styles.salonRatingText}>{salon.data.rating}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.salonMeta}>
-                    <Ionicons color={colors.text} name="location-outline" size={14} />
-                    <Text style={styles.salonMetaText}>{salon.location}</Text>
-                  </View>
-                  <View style={styles.salonChips}>
-                    {salon.chips.map((chip, index) => (
-                      <View key={chip} style={styles.salonChip}>
-                        <Text style={[styles.salonChipText, index === 0 && styles.salonChipUnisex]}>
-                          {chip}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </View>
+          renderBody()
         ) : (
           <View style={styles.grid}>
             {savedProducts.map((product) => (
@@ -232,6 +262,44 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     height: 40,
     width: 40,
+  },
+  state: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 32,
+    paddingTop: 96,
+  },
+  stateIcon: {
+    alignItems: 'center',
+    backgroundColor: '#FDEDDF',
+    borderRadius: 20,
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
+  },
+  stateTitle: {
+    color: colors.heading,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  stateBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: 24,
+    marginTop: 4,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  stateBtnText: {
+    color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
   segment: {
     backgroundColor: colors.segmentBg,

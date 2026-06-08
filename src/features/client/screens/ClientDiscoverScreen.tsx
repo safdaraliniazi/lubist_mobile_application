@@ -42,7 +42,6 @@ const colors = {
   bg: '#FFFAF5',
   searchBorder: '#E7D7C9',
   resultsMuted: '#6B7280',
-  mapBg: '#FFE9D6',
   sectionHeading: '#655D52',
   cardBg: '#FFF1E6',
   cardBorder: 'rgba(231, 215, 201, 0.5)',
@@ -124,10 +123,6 @@ export function ClientDiscoverScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsText}>{resultsLabel}</Text>
-          <Pressable style={styles.mapButton}>
-            <Ionicons color={colors.orange} name="navigate-outline" size={13} />
-            <Text style={styles.mapButtonText}>Map View</Text>
-          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -244,7 +239,7 @@ function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void
         <Pressable onPress={onBack}>
           <Ionicons color={colors.heading} name="arrow-back" size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>Services</Text>
+        <Text style={styles.headerTitle}>Salons</Text>
       </View>
 
       <Pressable onPress={onCart} style={styles.cartWrap}>
@@ -462,20 +457,6 @@ const styles = StyleSheet.create({
     color: colors.resultsMuted,
     fontFamily: 'Montserrat_500Medium',
     fontSize: 14,
-  },
-  mapButton: {
-    alignItems: 'center',
-    backgroundColor: colors.mapBg,
-    borderRadius: 9999,
-    flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  mapButtonText: {
-    color: colors.orange,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 12,
   },
   section: {
     gap: 16,
