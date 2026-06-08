@@ -32,20 +32,20 @@
 |--------|------:|------------------:|-----------------|
 | Auth | 16 | 13 | 🔴 High |
 | Location | 3 | 2 | 🔴 High |
-| Salons (public) | 16 | 5 | 🔴 High |
+| Salons (public) | 16 | 6 | 🔴 High |
 | Bookings | 8 | 0 | 🔴 High |
-| Customers (cart/fav/reviews) | 23 | 0 | 🔴 High |
+| Customers (cart/fav/reviews) | 23 | 6 | 🔴 High |
 | Products | 8 | 0 | 🔴 High |
 | Product Orders | 4 | 0 | 🔴 High |
-| Payments | 8 | 0 | 🟠 Medium |
+| Payments | 8 | 1 | 🟠 Medium |
 | Vendors | 15 | 0 | 🟠 Medium |
 | RM | 12 | 0 | 🟡 Low |
 | Careers | 6 | 0 | 🟡 Low |
 | Upload | 6 | 0 | 🟠 Medium |
 | Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **20** | |
+| **TOTAL** | **170** | **28** | |
 
-**Overall: 20 / 170 endpoints integrated (~12%).**
+**Overall: 28 / 170 endpoints integrated (~16%).**
 
 ---
 
@@ -56,6 +56,7 @@
 | TanStack Query provider | ✅ | `src/app/providers/AppProviders.tsx` |
 | Base fetch client (`apiGet`/`apiPost`) | 🟢 | `src/services/api/client.ts` — **added auth headers, PUT/PATCH/DELETE helpers, and auto refresh-on-401** |
 | Device location (`expo-location`) | 🟢 | `src/services/location/useDeviceLocation.ts` — **GPS + permission flow, used by ClientHome** |
+| Razorpay checkout (WebView) | 🟢 | `src/features/client/components/RazorpayCheckout.tsx` — **Expo Go-compatible; native SDK avoided** |
 | Auth token storage | 🟢 | `src/services/storage/tokenStorage.ts` — **using `expo-secure-store` persistence** |
 | AuthContext (real session) | 🟢 | `src/store/AuthContext.tsx` — **holds real token + user, auto-restores login on launch** |
 | Query key conventions | ⬜ | Define a `queryKeys` factory once we add `useQuery` reads |
@@ -114,8 +115,8 @@ File: `backend/app/api/salons.py`
 | GET | `/salons/{salon_id}/reviews` | public | `useSalonReviews` | SalonDetailsScreen | 🟢 |
 | GET | `/salons/{salon_id}/feedback` | public | — | — | ⬜ |
 | POST | `/salons/{salon_id}/feedback` | bearer | — | — | ⬜ |
-| GET | `/salons/{salon_id}/services` | public | (via `useSalonDetail?include_services`) | SalonDetailsScreen | 🟢 |
-| GET | `/salons/{salon_id}/available-slots` | public | — | SelectTimeScreen | ⬜ |
+| GET | `/salons/{salon_id}/services` | public | `useSalonServices` (taxonomy) | SalonServicesScreen | 🟢 |
+| GET | `/salons/{salon_id}/available-slots` | public | `useAvailableSlots` | SelectTimeScreen | 🟢 |
 | GET | `/salons/search/nearby` | public | — | ClientDiscover | ⬜ |
 | GET | `/salons/search/query` | public | `useSearchSalons` | ClientDiscover | 🟢 |
 | POST | `/salons/` | bearer (vendor) | — | — | ⬜ |
@@ -149,20 +150,20 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| GET | `/customers/cart` | bearer | — | CartScreen | ⬜ |
-| POST | `/customers/cart` | bearer | — | SalonServices / SelectTime | ⬜ |
-| PUT | `/customers/cart/{item_id}` | bearer | — | CartScreen | ⬜ |
-| DELETE | `/customers/cart/{item_id}` | bearer | — | CartScreen | ⬜ |
-| DELETE | `/customers/cart/clear/all` | bearer | — | CartScreen | ⬜ |
-| POST | `/customers/cart/checkout` | bearer | — | CheckoutScreen | ⬜ |
+| GET | `/customers/cart` | bearer | `useCart` | SalonServices / SelectTime / Checkout | 🟢 |
+| POST | `/customers/cart` | bearer | `useAddToCart` | SalonServices | 🟢 |
+| PUT | `/customers/cart/{item_id}` | bearer | `useUpdateCartItem` | (hook ready) | 🟡 |
+| DELETE | `/customers/cart/{item_id}` | bearer | `useRemoveCartItem` | SalonServices | 🟢 |
+| DELETE | `/customers/cart/clear/all` | bearer | `useClearCart` | (hook ready) | 🟡 |
+| POST | `/customers/cart/checkout` | bearer | `useCheckoutCart` | CheckoutScreen | 🟢 |
 | GET | `/customers/product-cart` | bearer | — | ClientShopping | ⬜ |
 | POST | `/customers/product-cart` | bearer | — | ProductDetail | ⬜ |
 | PUT | `/customers/product-cart/{item_id}` | bearer | — | ClientShopping | ⬜ |
 | DELETE | `/customers/product-cart/{item_id}` | bearer | — | ClientShopping | ⬜ |
 | DELETE | `/customers/product-cart/clear/all` | bearer | — | ClientShopping | ⬜ |
-| GET | `/customers/bookings/my-bookings` | bearer | — | ClientAppointments | ⬜ |
-| PUT | `/customers/bookings/{booking_id}/cancel` | bearer | — | ClientAppointments | ⬜ |
-| POST | `/customers/bookings` | bearer | — | Checkout | ⬜ |
+| GET | `/customers/bookings/my-bookings` | bearer | `useMyBookings` | ClientAppointments | 🟢 |
+| PUT | `/customers/bookings/{booking_id}/cancel` | bearer | `useCancelBooking` | ClientAppointments | 🟢 |
+| POST | `/customers/bookings` | bearer | — | (cart/checkout used instead) | ➖ |
 | GET | `/customers/salons` | bearer | — | ClientDiscover | ⬜ |
 | GET | `/customers/salons/search` | bearer | — | ClientDiscover | ⬜ |
 | GET | `/customers/salons/{salon_id}` | bearer | — | SalonDetails | ⬜ |
@@ -210,7 +211,7 @@ File: `backend/app/api/payments.py`
 |--------|------|------|------|--------|--------|
 | POST | `/payments/booking/create-order` | bearer | — | Checkout | ⬜ |
 | POST | `/payments/booking/verify` | bearer | — | Checkout | ⬜ |
-| POST | `/payments/cart/create-order` | bearer | — | Checkout | ⬜ |
+| POST | `/payments/cart/create-order` | bearer | `useCreateCartOrder` | Checkout (Razorpay WebView) | 🟢 |
 | POST | `/payments/registration/create-order` | bearer (vendor) | — | — | ⬜ |
 | POST | `/payments/registration/verify` | bearer (vendor) | — | — | ⬜ |
 | GET | `/payments/history` | bearer | — | ClientAccount | ⬜ |

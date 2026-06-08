@@ -209,7 +209,7 @@ export function CartScreen() {
       </ScrollView>
 
       <View style={styles.ctaShell}>
-        <Pressable onPress={() => navigation.navigate('Checkout', {})}>
+        <Pressable onPress={() => navigation.navigate('Tabs')}>
           <LinearGradient
             colors={['#D7A797', colors.gold]}
             end={{ x: 0.3, y: 1 }}

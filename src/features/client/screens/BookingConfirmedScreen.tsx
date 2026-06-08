@@ -26,22 +26,30 @@ type DetailRow = {
 type Navigation = NativeStackNavigationProp<ClientStackParamList>;
 type Route = RouteProp<ClientStackParamList, 'BookingConfirmed'>;
 
+function formatDate(ymd?: string) {
+  if (!ymd) return '—';
+  const d = new Date(`${ymd}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
 export function BookingConfirmedScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const service = route.params?.serviceName ?? 'Signature Hydrafacial';
+  const { bookingNumber, salonName, bookingDate, timeSlots } = route.params ?? {};
 
   const details: DetailRow[] = [
-    { id: 'date', icon: 'calendar-outline', label: 'Date', value: 'Thursday, Oct 12th' },
-    { id: 'time', icon: 'time-outline', label: 'Time', value: '2:30 PM - 3:45 PM' },
+    ...(bookingNumber
+      ? [{ id: 'ref', icon: 'receipt-outline' as const, label: 'Booking Number', value: bookingNumber }]
+      : []),
+    { id: 'date', icon: 'calendar-outline', label: 'Date', value: formatDate(bookingDate) },
     {
-      id: 'location',
-      icon: 'location-outline',
-      label: 'Location',
-      value: 'Aura Glow Spa',
-      sub: '124 Main St, Suite 200',
+      id: 'time',
+      icon: 'time-outline',
+      label: timeSlots && timeSlots.length > 1 ? 'Time Slots' : 'Time',
+      value: timeSlots && timeSlots.length ? timeSlots.join(', ') : '—',
     },
-    { id: 'service', icon: 'cut-outline', label: 'Service', value: service },
+    { id: 'location', icon: 'location-outline', label: 'Salon', value: salonName ?? 'Salon' },
   ];
 
   return (

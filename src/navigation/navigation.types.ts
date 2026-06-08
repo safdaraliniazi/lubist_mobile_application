@@ -62,16 +62,24 @@ export type ClientStackParamList = {
     salon?: SalonRouteData;
   };
   SalonServices: {
+    salonId: string;
     salonName?: string;
   };
   SelectTime: {
-    serviceName?: string;
+    salonId: string;
+    salonName?: string;
   };
   Checkout: {
-    serviceName?: string;
+    salonId: string;
+    salonName?: string;
+    bookingDate: string;
+    timeSlots: string[];
   };
   BookingConfirmed: {
-    serviceName?: string;
+    bookingNumber?: string;
+    salonName?: string;
+    bookingDate?: string;
+    timeSlots?: string[];
   };
   ProductCatalog: {
     category?: string;

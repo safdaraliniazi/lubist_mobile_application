@@ -210,7 +210,13 @@ export function SalonDetailsScreen() {
           <LocationCard name={name} location={locationText} />
         </ScrollView>
 
-        <StickyBookButton onPress={() => navigation.navigate('SalonServices', { salonName: name })} />
+        <StickyBookButton
+          onPress={() =>
+            salonId
+              ? navigation.navigate('SalonServices', { salonId, salonName: name })
+              : navigation.goBack()
+          }
+        />
       </View>
     </SafeAreaView>
   );

@@ -32,6 +32,18 @@ export interface SalonDetail extends Salon {
   working_days?: string[] | null;
 }
 
+export interface TaxonomyNode {
+  id: string;
+  name: string;
+  icon_url?: string | null;
+}
+
+export interface ServiceTaxonomy {
+  category: TaxonomyNode | null;
+  subcategory: TaxonomyNode | null;
+  sub_subcategory: TaxonomyNode | null;
+}
+
 export interface SalonService {
   id: string;
   salon_id: string;
@@ -42,6 +54,12 @@ export interface SalonService {
   discount_percentage?: number | null;
   discounted_price?: number | null;
   category_id?: string | null;
+  taxonomy?: ServiceTaxonomy | null;
+}
+
+interface SalonServicesResponse {
+  services: SalonService[];
+  count: number;
 }
 
 export interface SalonReview {
@@ -112,6 +130,16 @@ export function useSalonDetail(salonId?: string) {
     enabled: !!salonId,
     queryFn: async () =>
       await apiGet<SalonDetailResponse>(`/api/v1/salons/${salonId}?include_services=true`),
+  });
+}
+
+/** A salon's services with full category/subcategory taxonomy attached. */
+export function useSalonServices(salonId?: string) {
+  return useQuery({
+    queryKey: ['salonServices', salonId ?? null],
+    enabled: !!salonId,
+    queryFn: async () =>
+      await apiGet<SalonServicesResponse>(`/api/v1/salons/${salonId}/services`),
   });
 }
 
