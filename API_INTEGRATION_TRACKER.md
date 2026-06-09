@@ -119,11 +119,14 @@ File: `backend/app/api/salons.py`
 | GET | `/salons/{salon_id}/available-slots` | public | `useAvailableSlots` | SelectTimeScreen | 🟢 |
 | GET | `/salons/search/nearby` | public | — | ClientDiscover | ⬜ |
 | GET | `/salons/search/query` | public | `useSearchSalons` | ClientDiscover | 🟢 |
-| POST | `/salons/` | bearer (vendor) | — | — | ⬜ |
-| PATCH | `/salons/{salon_id}` | bearer (vendor) | — | — | ⬜ |
-| POST | `/salons/{salon_id}/approve` | bearer (admin/rm) | — | — | ➖ |
-| POST | `/salons/{salon_id}/images` | bearer (vendor) | — | — | ⬜ |
 | GET | `/salons/config/public` | public | — | — | ⬜ |
+
+> ❌ Removed (were dead/broken — called non-existent `db.*` methods, never wired to any frontend). Use the real paths instead:
+> - Salon create → `POST /api/v1/admin/vendor-requests/{id}/approve` (vendor-approval flow)
+> - Salon update/delete/status → `/api/v1/admin/salons/*`
+> - Salon image upload → `app/api/upload.py`
+>
+> ~~`POST /salons/`~~, ~~`PATCH /salons/{salon_id}`~~, ~~`POST /salons/{salon_id}/approve`~~, ~~`POST /salons/{salon_id}/images`~~
 
 ---
 
