@@ -3,10 +3,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
+  Linking,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +33,7 @@ import {
   type NearbySalon,
 } from '@/services/api/hooks/useLocationAPI';
 import { usePublicSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
+import { useBanners, bannerImageUri, type Banner } from '@/services/api/hooks/useBannersAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 
@@ -174,7 +179,7 @@ export function ClientHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <HeroBanner />
+        <HeroCarousel />
         <SearchBar />
         <AppointmentsCard />
 
@@ -250,11 +255,79 @@ function Header({
   );
 }
 
-function HeroBanner() {
+// Width of a full-bleed hero card: screen width minus the scroll content's
+// horizontal padding (16 each side).
+const HERO_WIDTH = Dimensions.get('window').width - 32;
+
+/**
+ * Home-screen hero carousel, driven by admin-managed banners (useBanners).
+ * Falls back to the bundled hero asset while loading or when no banners exist,
+ * so the screen never looks broken. Banners with a `link_url` are tappable.
+ */
+function HeroCarousel() {
+  const { data, isLoading } = useBanners();
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const banners = data?.banners ?? [];
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / HERO_WIDTH);
+    if (index !== activeIndex) setActiveIndex(index);
+  };
+
+  const openLink = (banner: Banner) => {
+    const url = banner.link_url?.trim();
+    if (url && /^https?:\/\//i.test(url)) {
+      Linking.openURL(url).catch(() => {});
+    }
+  };
+
+  // Fallback: bundled hero while loading or when there are no active banners.
+  if (isLoading || banners.length === 0) {
+    return (
+      <View style={styles.heroBanner}>
+        <Image source={hero} style={styles.heroImage} />
+      </View>
+    );
+  }
+
+  // Single banner: no need for a pager.
+  if (banners.length === 1) {
+    return <HeroSlide banner={banners[0]} onPress={openLink} />;
+  }
+
   return (
-    <View style={styles.heroBanner}>
-      <Image source={hero} style={styles.heroImage} />
+    <View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onScroll}
+      >
+        {banners.map((banner) => (
+          <HeroSlide key={banner.id} banner={banner} onPress={openLink} />
+        ))}
+      </ScrollView>
+      <PaginationDots activeIndex={activeIndex} count={banners.length} />
     </View>
+  );
+}
+
+function HeroSlide({ banner, onPress }: { banner: Banner; onPress: (b: Banner) => void }) {
+  const remote = bannerImageUri(banner);
+  const tappable = Boolean(banner.link_url?.trim());
+  return (
+    <Pressable
+      disabled={!tappable}
+      onPress={() => onPress(banner)}
+      style={[styles.heroBanner, { width: HERO_WIDTH }]}
+    >
+      <Image
+        source={remote ? { uri: remote } : hero}
+        style={styles.heroImage}
+        accessibilityLabel={banner.title ?? 'Promotional banner'}
+      />
+    </Pressable>
   );
 }
 

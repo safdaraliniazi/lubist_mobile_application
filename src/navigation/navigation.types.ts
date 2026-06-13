@@ -83,8 +83,10 @@ export type ClientStackParamList = {
   };
   ProductCatalog: {
     category?: string;
+    search?: string;
   };
   ProductDetail: {
+    productId?: string;
     productName?: string;
   };
   Cart: undefined;

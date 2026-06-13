@@ -3,17 +3,37 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList, ClientTabParamList } from '@/navigation/navigation.types';
+import {
+  Product,
+  discountLabel,
+  effectivePrice,
+  formatPrice,
+  originalPrice,
+  productImageUri,
+  useAddToProductCart,
+  useFeaturedProducts,
+  useProductCart,
+  useProductCategories,
+} from '@/services/api/hooks/useProductsAPI';
 
 const brandHaircare = require('@/assets/home/brand-haircare.png');
 const brandSkincare = require('@/assets/home/brand-skincare.png');
 const brandMakeup = require('@/assets/home/brand-makeup.png');
 const loreal = require('@/assets/catalog/loreal.png');
-const olaplex = require('@/assets/catalog/olaplex.png');
-const moroccanoil = require('@/assets/catalog/moroccanoil.png');
 
 const colors = {
   bg: '#FFFAF5',
@@ -35,61 +55,18 @@ const colors = {
   placeholder: 'rgba(83, 68, 51, 0.5)',
 };
 
-type Category = { id: string; label: string; image?: number; icon?: keyof typeof Ionicons.glyphMap };
+// Known categories get a custom illustration; anything else falls back to an icon.
+const CATEGORY_IMAGES: Record<string, number> = {
+  haircare: brandHaircare,
+  skincare: brandSkincare,
+  makeup: brandMakeup,
+};
 
-const categories: Category[] = [
-  { id: 'c1', label: 'Haircare', image: brandHaircare },
-  { id: 'c2', label: 'Skincare', image: brandSkincare },
-  { id: 'c3', label: 'Makeup', image: brandMakeup },
-  { id: 'c4', label: 'Bath&Body', icon: 'flower-outline' },
-];
+const productFallback = loreal;
 
 const offers = [
   { id: 'o1', title: 'Flat 10% OFF', subtitle: 'On all products with online payment.' },
   { id: 'o2', title: 'Buy 2 Get 1', subtitle: 'On select haircare essentials.' },
-];
-
-type Product = {
-  id: string;
-  brand: string;
-  desc: string;
-  size: string;
-  price: string;
-  original?: string;
-  discount?: string;
-  image: number;
-};
-
-const products: Product[] = [
-  {
-    id: 'p1',
-    brand: "L'Oreal Paris",
-    desc: 'Hyaluron Moisture Anti-\nfrizz...',
-    size: '1L',
-    original: '₹1315',
-    price: '₹986',
-    discount: '25% Off',
-    image: loreal,
-  },
-  { id: 'p2', brand: 'Olaplex', desc: 'No. 4 Bond\nMaintenance...', size: '250ml', price: '₹2950', image: olaplex },
-  {
-    id: 'p3',
-    brand: 'Moroccanoil',
-    desc: 'Hydrating Shampoo for\nall hair types...',
-    size: '500ml',
-    price: '₹1850',
-    image: moroccanoil,
-  },
-  {
-    id: 'p4',
-    brand: "L'Oreal Paris",
-    desc: 'Hyaluron Moisture Anti-\nfrizz...',
-    size: '1L',
-    original: '₹1315',
-    price: '₹986',
-    discount: '25% Off',
-    image: loreal,
-  },
 ];
 
 type ShoppingNavigation = BottomTabNavigationProp<ClientTabParamList>;
@@ -97,8 +74,24 @@ type ShoppingNavigation = BottomTabNavigationProp<ClientTabParamList>;
 export function ClientShoppingScreen() {
   const navigation = useNavigation<ShoppingNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
-  const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
-  const openProduct = (productName: string) => parent?.navigate('ProductDetail', { productName });
+  const openCatalog = (category?: string) => parent?.navigate('ProductCatalog', { category });
+  const openProduct = (product: Product) =>
+    parent?.navigate('ProductDetail', { productId: product.id, productName: product.brand ?? product.name });
+
+  const [search, setSearch] = useState('');
+  const categoriesQuery = useProductCategories();
+  const featuredQuery = useFeaturedProducts();
+  const cart = useProductCart();
+  const addToCart = useAddToProductCart();
+
+  const categories = categoriesQuery.data?.categories ?? [];
+  const products = featuredQuery.data?.products ?? [];
+  const cartCount = cart.data?.item_count ?? 0;
+
+  const submitSearch = () => {
+    const q = search.trim();
+    if (q) parent?.navigate('ProductCatalog', { search: q });
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -106,9 +99,11 @@ export function ClientShoppingScreen() {
         <Text style={styles.headerTitle}>Shopping</Text>
         <Pressable onPress={() => parent?.navigate('Cart')} style={styles.cartWrap}>
           <Ionicons color={colors.heading} name="cart-outline" size={24} />
-          <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>4</Text>
-          </View>
+          {cartCount > 0 ? (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{cartCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -116,27 +111,44 @@ export function ClientShoppingScreen() {
         <View style={styles.searchBar}>
           <Ionicons color={colors.placeholder} name="search-outline" size={20} />
           <TextInput
+            onChangeText={setSearch}
+            onSubmitEditing={submitSearch}
             placeholder="Search products, brands..."
             placeholderTextColor={colors.placeholder}
+            returnKeyType="search"
             style={styles.searchInput}
+            value={search}
           />
         </View>
 
         <Text style={styles.sectionTitle}>SHOP BY CATEGORY</Text>
-        <View style={styles.categoriesRow}>
-          {categories.map((item) => (
-            <Pressable key={item.id} onPress={() => openCatalog(item.label)} style={styles.categoryItem}>
-              <View style={styles.categoryCircle}>
-                {item.image ? (
-                  <Image source={item.image} style={styles.categoryImage} />
-                ) : item.icon ? (
-                  <Ionicons color={colors.muted2} name={item.icon} size={24} />
-                ) : null}
-              </View>
-              <Text style={styles.categoryLabel}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
+        {categoriesQuery.isLoading ? (
+          <ActivityIndicator color={colors.gold} style={styles.sectionLoader} />
+        ) : categories.length === 0 ? (
+          <Text style={styles.emptyText}>No categories yet.</Text>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.categoriesRow}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {categories.map((label) => {
+              const image = CATEGORY_IMAGES[label.toLowerCase()];
+              return (
+                <Pressable key={label} onPress={() => openCatalog(label)} style={styles.categoryItem}>
+                  <View style={styles.categoryCircle}>
+                    {image ? (
+                      <Image source={image} style={styles.categoryImage} />
+                    ) : (
+                      <Ionicons color={colors.muted2} name="flower-outline" size={24} />
+                    )}
+                  </View>
+                  <Text style={styles.categoryLabel}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
 
         <Text style={[styles.sectionTitle, styles.sectionSpaced]}>CURRENT OFFERS</Text>
         <ScrollView
@@ -165,35 +177,55 @@ export function ClientShoppingScreen() {
 
         <View style={[styles.sectionHeaderRow, styles.sectionSpaced]}>
           <Text style={styles.sectionTitle}>TRENDING NOW</Text>
-          <Pressable onPress={() => openCatalog('Trending')} style={styles.seeAll}>
+          <Pressable onPress={() => openCatalog()} style={styles.seeAll}>
             <Text style={styles.seeAllText}>SEE ALL </Text>
             <Ionicons color={colors.gold} name="chevron-forward" size={12} />
           </Pressable>
         </View>
 
-        <View style={styles.grid}>
-          {products.map((product) => (
-            <Pressable
-              key={product.id}
-              onPress={() => openProduct(product.brand)}
-              style={styles.card}
-            >
-              <Image source={product.image} style={styles.productImage} />
-              <Text style={styles.productBrand}>{product.brand}</Text>
-              <Text style={styles.productDesc}>{product.desc}</Text>
-              <Text style={styles.productSize}>{product.size}</Text>
-              <View style={styles.priceRow}>
-                {product.original ? <Text style={styles.priceOriginal}>{product.original}</Text> : null}
-                <Text style={styles.priceSale}>{product.price}</Text>
-                {product.discount ? <Text style={styles.priceDiscount}>{product.discount}</Text> : null}
-              </View>
-              <View style={styles.addButton}>
-                <Text style={styles.addText}>Add</Text>
-                <Ionicons color={colors.white} name="bag-add-outline" size={11} />
-              </View>
-            </Pressable>
-          ))}
-        </View>
+        {featuredQuery.isLoading ? (
+          <ActivityIndicator color={colors.gold} style={styles.sectionLoader} />
+        ) : featuredQuery.isError ? (
+          <Text style={styles.emptyText}>Couldn’t load products. Pull to retry.</Text>
+        ) : products.length === 0 ? (
+          <Text style={styles.emptyText}>No trending products right now.</Text>
+        ) : (
+          <View style={styles.grid}>
+            {products.map((product) => {
+              const original = originalPrice(product);
+              const discount = discountLabel(product);
+              const uri = productImageUri(product);
+              return (
+                <Pressable key={product.id} onPress={() => openProduct(product)} style={styles.card}>
+                  <Image
+                    source={uri ? { uri } : productFallback}
+                    style={styles.productImage}
+                  />
+                  <Text style={styles.productBrand}>{product.brand ?? product.name}</Text>
+                  <Text numberOfLines={2} style={styles.productDesc}>
+                    {product.short_description ?? product.name}
+                  </Text>
+                  {product.weight ? <Text style={styles.productSize}>{product.weight}</Text> : null}
+                  <View style={styles.priceRow}>
+                    {original ? (
+                      <Text style={styles.priceOriginal}>{formatPrice(original)}</Text>
+                    ) : null}
+                    <Text style={styles.priceSale}>{formatPrice(effectivePrice(product))}</Text>
+                    {discount ? <Text style={styles.priceDiscount}>{discount}</Text> : null}
+                  </View>
+                  <Pressable
+                    disabled={addToCart.isPending}
+                    onPress={() => addToCart.mutate({ product_id: product.id })}
+                    style={styles.addButton}
+                  >
+                    <Text style={styles.addText}>Add</Text>
+                    <Ionicons color={colors.white} name="bag-add-outline" size={11} />
+                  </Pressable>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -281,6 +313,15 @@ const styles = StyleSheet.create({
   },
   sectionSpaced: {
     marginTop: 28,
+  },
+  sectionLoader: {
+    marginTop: 24,
+  },
+  emptyText: {
+    color: colors.muted2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    marginTop: 16,
   },
   sectionHeaderRow: {
     alignItems: 'center',
@@ -370,17 +411,17 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    justifyContent: 'space-between',
     marginTop: 14,
+    rowGap: 12,
   },
   card: {
     borderColor: colors.cardBorder,
     borderRadius: 8,
     borderWidth: 1,
     gap: 2,
-    margin: 6,
     padding: 8,
-    width: '47%',
+    width: '48%',
   },
   productImage: {
     backgroundColor: colors.cardCream,

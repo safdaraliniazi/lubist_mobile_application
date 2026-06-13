@@ -1,60 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import {
+  Product,
+  discountLabel,
+  effectivePrice,
+  formatPrice,
+  originalPrice,
+  productImageUri,
+  useAddToProductCart,
+  useProductCart,
+  useProducts,
+} from '@/services/api/hooks/useProductsAPI';
 
-const loreal = require('@/assets/catalog/loreal.png');
-const olaplex = require('@/assets/catalog/olaplex.png');
-const moroccanoil = require('@/assets/catalog/moroccanoil.png');
-
-type Product = {
-  id: string;
-  brand: string;
-  desc: string;
-  size: string;
-  price: string;
-  original?: string;
-  discount?: string;
-  image: number;
-};
-
-const baseProducts: Product[] = [
-  {
-    id: 'loreal',
-    brand: "L'Oreal Paris",
-    desc: 'Hyaluron Moisture Anti-\nfrizz...',
-    size: '1L',
-    original: '₹1315',
-    price: '₹986',
-    discount: '25% Off',
-    image: loreal,
-  },
-  {
-    id: 'olaplex',
-    brand: 'Olaplex',
-    desc: 'No. 4 Bond\nMaintenance...',
-    size: '250ml',
-    price: '₹2950',
-    image: olaplex,
-  },
-  {
-    id: 'moroccanoil',
-    brand: 'Moroccanoil',
-    desc: 'Hydrating Shampoo for\nall hair types...',
-    size: '500ml',
-    price: '₹1850',
-    image: moroccanoil,
-  },
-];
-
-const products: Product[] = baseProducts.flatMap((product, index) => [
-  product,
-  { ...product, id: `${product.id}-${index}-b` },
-]);
+const productFallback = require('@/assets/catalog/loreal.png');
 
 const offers = [
   { id: 'o1', title: 'Flat 10% OFF', subtitle: 'On all services with online payment.' },
@@ -86,7 +61,21 @@ type Route = RouteProp<ClientStackParamList, 'ProductCatalog'>;
 export function ProductCatalogScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const title = route.params?.category ?? 'Shampoo';
+  const category = route.params?.category;
+  const initialSearch = route.params?.search ?? '';
+  const title = category ?? (initialSearch ? `“${initialSearch}”` : 'All Products');
+
+  const [search, setSearch] = useState(initialSearch);
+  const debouncedSearch = useDebouncedValue(search);
+  const productsQuery = useProducts({ category, search: debouncedSearch });
+  const products = productsQuery.data?.products ?? [];
+
+  const cart = useProductCart();
+  const cartCount = cart.data?.item_count ?? 0;
+  const addToCart = useAddToProductCart();
+
+  const openProduct = (product: Product) =>
+    navigation.navigate('ProductDetail', { productId: product.id, productName: product.brand ?? product.name });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -99,9 +88,11 @@ export function ProductCatalogScreen() {
         </View>
         <Pressable onPress={() => navigation.navigate('Cart')} style={styles.cartWrap}>
           <Ionicons color={colors.heading} name="cart-outline" size={24} />
-          <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>4</Text>
-          </View>
+          {cartCount > 0 ? (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{cartCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -109,9 +100,12 @@ export function ProductCatalogScreen() {
         <View style={styles.searchInput}>
           <Ionicons color={colors.text} name="search-outline" size={18} />
           <TextInput
-            placeholder="Search salons, services..."
+            onChangeText={setSearch}
+            placeholder="Search products, brands..."
             placeholderTextColor={colors.placeholder}
+            returnKeyType="search"
             style={styles.searchText}
+            value={search}
           />
         </View>
         <Pressable style={styles.filterButton}>
@@ -144,35 +138,48 @@ export function ProductCatalogScreen() {
         </ScrollView>
 
         <Text style={[styles.sectionTitle, styles.productsHeading]}>OUR PRODUCTS</Text>
-        <View style={styles.grid}>
-          {products.map((product) => (
-            <Pressable
-              key={product.id}
-              onPress={() => navigation.navigate('ProductDetail', { productName: product.brand })}
-              style={styles.card}
-            >
-              <Image source={product.image} style={styles.productImage} />
-              <Text style={styles.productBrand}>{product.brand}</Text>
-              <Text style={styles.productDesc}>{product.desc}</Text>
-              <Text style={styles.productSize}>{product.size}</Text>
+        {productsQuery.isLoading ? (
+          <ActivityIndicator color={colors.gold} size="large" style={styles.loader} />
+        ) : productsQuery.isError ? (
+          <Text style={styles.emptyText}>Couldn’t load products. Please try again.</Text>
+        ) : products.length === 0 ? (
+          <Text style={styles.emptyText}>No products found.</Text>
+        ) : (
+          <View style={styles.grid}>
+            {products.map((product) => {
+              const original = originalPrice(product);
+              const discount = discountLabel(product);
+              const uri = productImageUri(product);
+              return (
+                <Pressable key={product.id} onPress={() => openProduct(product)} style={styles.card}>
+                  <Image source={uri ? { uri } : productFallback} style={styles.productImage} />
+                  <Text style={styles.productBrand}>{product.brand ?? product.name}</Text>
+                  <Text numberOfLines={2} style={styles.productDesc}>
+                    {product.short_description ?? product.name}
+                  </Text>
+                  {product.weight ? <Text style={styles.productSize}>{product.weight}</Text> : null}
 
-              <View style={styles.priceRow}>
-                {product.original ? (
-                  <Text style={styles.priceOriginal}>{product.original}</Text>
-                ) : null}
-                <Text style={styles.priceSale}>{product.price}</Text>
-                {product.discount ? (
-                  <Text style={styles.priceDiscount}>{product.discount}</Text>
-                ) : null}
-              </View>
+                  <View style={styles.priceRow}>
+                    {original ? (
+                      <Text style={styles.priceOriginal}>{formatPrice(original)}</Text>
+                    ) : null}
+                    <Text style={styles.priceSale}>{formatPrice(effectivePrice(product))}</Text>
+                    {discount ? <Text style={styles.priceDiscount}>{discount}</Text> : null}
+                  </View>
 
-              <Pressable style={styles.addButton}>
-                <Text style={styles.addText}>Add</Text>
-                <Ionicons color={colors.white} name="bag-add-outline" size={11} />
-              </Pressable>
-            </Pressable>
-          ))}
-        </View>
+                  <Pressable
+                    disabled={addToCart.isPending}
+                    onPress={() => addToCart.mutate({ product_id: product.id })}
+                    style={styles.addButton}
+                  >
+                    <Text style={styles.addText}>Add</Text>
+                    <Ionicons color={colors.white} name="bag-add-outline" size={11} />
+                  </Pressable>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -310,6 +317,16 @@ const styles = StyleSheet.create({
   },
   productsHeading: {
     marginTop: 28,
+  },
+  loader: {
+    marginTop: 40,
+  },
+  emptyText: {
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
   grid: {
     flexDirection: 'row',

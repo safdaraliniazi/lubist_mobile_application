@@ -31,21 +31,20 @@
 | Domain | Total | Integrated (🟢/✅) | Mobile priority |
 |--------|------:|------------------:|-----------------|
 | Auth | 16 | 12 | 🔴 High |
-| Location | 3 | 2 | 🔴 High |
-| Salons (public) | 16 | 6 | 🔴 High |
-| Bookings | 8 | 0 | 🔴 High |
-| Customers (cart/fav/reviews) | 23 | 14 | 🔴 High |
-| Products | 8 | 0 | 🔴 High |
+| Location | 2 | 2 | 🔴 High |
+| Salons (public) | 10 | 6 | 🔴 High |
+| Customers (cart/fav/reviews) | 22 | 21 | 🔴 High |
+| Products | 8 | 3 | 🔴 High |
 | Product Orders | 4 | 0 | 🔴 High |
-| Payments | 8 | 1 | 🟠 Medium |
-| Vendors | 15 | 0 | 🟠 Medium |
-| RM | 12 | 0 | 🟡 Low |
-| Careers | 6 | 0 | 🟡 Low |
-| Upload | 6 | 0 | 🟠 Medium |
-| Admin (all sub-routers) | 45 | 0 | ➖ Web-only |
-| **TOTAL** | **170** | **35** | |
+| Payments | 3 | 1 | 🟠 Medium |
+| Vendors | 14 | 0 | 🟠 Medium |
+| RM | 10 | 0 | 🟡 Low |
+| Careers | 5 | 0 | 🟡 Low |
+| Upload | 4 | 0 | 🟠 Medium |
+| Admin (all sub-routers) | 41 | 0 | ➖ Web-only |
+| **TOTAL** | **139** | **45** | |
 
-**Overall: 35 / 170 endpoints integrated (~21%).**
+**Overall: 45 / 139 endpoints integrated (~32%).**
 
 ---
 
@@ -82,7 +81,7 @@ File: `backend/app/api/auth.py` · Mobile hooks: `src/services/api/hooks/useAuth
 | POST | `/auth/logout-all` | bearer | `useLogoutAll` | ProfileScreen | 🟢 |
 | POST | `/auth/password-reset` | public | `usePasswordReset` | ForgotPasswordScreen | 🟢 |
 | POST | `/auth/password-reset/confirm` | public | `usePasswordResetConfirm` | — | ⬜ |
-| POST | `/auth/resend-verification` | public | `useResendVerification` | — | ⬜ |
+| POST | `/auth/resend-verification` | bearer | `useResendVerification` | — | ⬜ |
 | POST | `/auth/signup/phone/send-otp` | public | `useSendSignupPhoneOtp` | SignupScreen | 🟢 |
 | POST | `/auth/signup/phone/verify-otp` | public | `useVerifySignupPhoneOtp` | OtpVerifyScreen | 🟢 |
 | POST | `/auth/login/phone/send-otp` | public | `useSendPhoneOtp` | SignInScreen | 🟢 |
@@ -97,7 +96,6 @@ File: `backend/app/api/location.py`
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| POST | `/location/geocode` | public | — | — | ⬜ |
 | GET | `/location/reverse-geocode` | public | `useReverseGeocode` | ClientHome | 🟢 |
 | GET | `/location/salons/nearby` | public | `useNearbySalons` | ClientHome | 🟢 |
 
@@ -110,14 +108,12 @@ File: `backend/app/api/salons.py`
 |--------|------|------|------|--------|--------|
 | GET | `/salons/public` | public | `usePublicSalons` | ClientDiscover | 🟢 |
 | GET | `/salons/popular-cities` | public | — | ClientHome | ⬜ |
-| GET | `/salons/` | public | — | ClientDiscover | ⬜ |
 | GET | `/salons/{salon_id}` | public | `useSalonDetail` | SalonDetailsScreen | 🟢 |
 | GET | `/salons/{salon_id}/reviews` | public | `useSalonReviews` | SalonDetailsScreen | 🟢 |
 | GET | `/salons/{salon_id}/feedback` | public | — | — | ⬜ |
 | POST | `/salons/{salon_id}/feedback` | bearer | — | — | ⬜ |
 | GET | `/salons/{salon_id}/services` | public | `useSalonServices` (taxonomy) | SalonServicesScreen | 🟢 |
 | GET | `/salons/{salon_id}/available-slots` | public | `useAvailableSlots` | SelectTimeScreen | 🟢 |
-| GET | `/salons/search/nearby` | public | — | ClientDiscover | ⬜ |
 | GET | `/salons/search/query` | public | `useSearchSalons` | ClientDiscover | 🟢 |
 | GET | `/salons/config/public` | public | — | — | ⬜ |
 
@@ -126,25 +122,16 @@ File: `backend/app/api/salons.py`
 > - Salon update/delete/status → `/api/v1/admin/salons/*`
 > - Salon image upload → `app/api/upload.py`
 >
-> ~~`POST /salons/`~~, ~~`PATCH /salons/{salon_id}`~~, ~~`POST /salons/{salon_id}/approve`~~, ~~`POST /salons/{salon_id}/images`~~
+> ~~`POST /salons/`~~, ~~`PATCH /salons/{salon_id}`~~, ~~`POST /salons/{salon_id}/approve`~~, ~~`POST /salons/{salon_id}/images`~~, ~~`GET /salons/`~~, ~~`GET /salons/search/nearby`~~
 
 ---
 
-## 📅 Bookings — `/api/v1/bookings`
-File: `backend/app/api/bookings.py`
+## ⚠️ Bookings — standalone `/api/v1/bookings/*` router does not exist
 
-| Method | Path | Auth | Hook | Screen | Status |
-|--------|------|------|------|--------|--------|
-| GET | `/bookings/` | bearer | — | — | ⬜ |
-| GET | `/bookings/user/{user_id}` | bearer | — | — | ⬜ |
-| GET | `/bookings/salon/{salon_id}` | bearer | — | — | ⬜ |
-| GET | `/bookings/{booking_id}` | bearer | — | — | ⬜ |
-| POST | `/bookings/` | bearer | — | Checkout / BookingConfirmed | ⬜ |
-| PATCH | `/bookings/{booking_id}` | bearer | — | — | ⬜ |
-| POST | `/bookings/{booking_id}/cancel` | bearer | — | ClientAppointments | ⬜ |
-| POST | `/bookings/{booking_id}/complete` | bearer | — | — | ⬜ |
-
-> Note: customer-facing booking flow is largely under `/customers/*` below — decide which set is canonical for the client app.
+> The dedicated `bookings.py` router was removed. All customer-facing booking
+> operations now live under `/customers/bookings/*` (see Customers section).
+> Vendor booking management is under `/vendors/bookings/*`.
+> Admin booking management is under `/admin/bookings/*`.
 
 ---
 
@@ -159,40 +146,47 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 | DELETE | `/customers/cart/{item_id}` | bearer | `useRemoveCartItem` | SalonServices / Checkout | 🟢 |
 | DELETE | `/customers/cart/clear/all` | bearer | `useClearCart` | CheckoutScreen (Clear all) | 🟢 |
 | POST | `/customers/cart/checkout` | bearer | `useCheckoutCart` | CheckoutScreen | 🟢 |
-| GET | `/customers/product-cart` | bearer | — | ClientShopping | ⬜ |
-| POST | `/customers/product-cart` | bearer | — | ProductDetail | ⬜ |
-| PUT | `/customers/product-cart/{item_id}` | bearer | — | ClientShopping | ⬜ |
-| DELETE | `/customers/product-cart/{item_id}` | bearer | — | ClientShopping | ⬜ |
-| DELETE | `/customers/product-cart/clear/all` | bearer | — | ClientShopping | ⬜ |
+| GET | `/customers/product-cart` | bearer | `useProductCart` | Cart / ProductDetail / Shopping / Catalog | 🟢 |
+| POST | `/customers/product-cart` | bearer | `useAddToProductCart` | ProductDetail / Shopping / Catalog | 🟢 |
+| PUT | `/customers/product-cart/{item_id}` | bearer | `useUpdateProductCartItem` | CartScreen (qty stepper) | 🟢 |
+| DELETE | `/customers/product-cart/{item_id}` | bearer | `useRemoveProductCartItem` | CartScreen (remove) | 🟢 |
+| DELETE | `/customers/product-cart/clear/all` | bearer | `useClearProductCart` | — | 🟡 |
 | GET | `/customers/bookings/my-bookings` | bearer | `useMyBookings` | ClientAppointments | 🟢 |
 | PUT | `/customers/bookings/{booking_id}/cancel` | bearer | `useCancelBooking` | ClientAppointments | 🟢 |
-| POST | `/customers/bookings` | bearer | — | (cart/checkout used instead) | ➖ |
-| GET | `/customers/salons` | bearer | — | ClientDiscover | ➖ (use public `/salons/public`) |
-| GET | `/customers/salons/search` | bearer | — | ClientDiscover | ➖ (use public `/salons/search/query`) |
-| GET | `/customers/salons/{salon_id}` | bearer | — | SalonDetails | ➖ (use public `/salons/{id}`) |
-| GET | `/customers/favorites` | bearer | `useFavorites` | SalonDetails | 🟢 |
+| GET | `/customers/favorites` | bearer | `useFavorites` | SalonDetails / ClientAccount (Saved) | 🟢 |
 | POST | `/customers/favorites` | bearer | `useAddFavorite` | SalonDetails | 🟢 |
-| DELETE | `/customers/favorites/{salon_id}` | bearer | `useRemoveFavorite` | SalonDetails | 🟢 |
+| DELETE | `/customers/favorites/{salon_id}` | bearer | `useRemoveFavorite` | SalonDetails / ClientAccount (Saved) | 🟢 |
+| GET | `/customers/favorites/products` | bearer | `useFavoriteProducts` | ClientAccount (Saved → Products) | 🟢 |
+| POST | `/customers/favorites/products` | bearer | `useAddFavoriteProduct` | ProductDetail (heart toggle) | 🟢 |
+| DELETE | `/customers/favorites/products/{product_id}` | bearer | `useRemoveFavoriteProduct` | ProductDetail / ClientAccount (Saved) | 🟢 |
 | GET | `/customers/reviews/my-reviews` | bearer | `useMyReviews` | MyReviewsScreen (via Profile) | 🟢 |
 | POST | `/customers/reviews` | bearer | `useCreateReview` | ClientAppointments + SalonDetails (needs a completed booking) | 🟢 |
 | PUT | `/customers/reviews/{review_id}` | bearer | `useUpdateReview` | MyReviewsScreen (edit) | 🟢 |
 
-> **Service cart / favorites / reviews / browse are complete.** The 5 `product-cart/*` rows
-> stay ⬜ on purpose — they depend on the Products catalog (not yet integrated) and will be
-> wired as part of the **Products** rollout. Browse (`/customers/salons*`) is ➖ because the
-> public `/salons/*` endpoints already cover it.
+> **Service cart / favorites / reviews are complete.** Product-cart is now wired as part of
+> the Products rollout: add from ProductDetail/Shopping/Catalog, quantity + remove on CartScreen,
+> live cart-count badges. `clear/all` has a hook (`useClearProductCart`) but no UI button yet (🟡).
+> CartScreen's "Proceed to Checkout" is still a placeholder until **Product Orders** is wired.
+>
+> **Product favorites (NEW)** — `/customers/favorites/products` (GET/POST/DELETE) added so the
+> Saved tab shows saved products alongside saved salons. Hooks live in `useProductsAPI.ts`
+> (`useFavoriteProducts` / `useAddFavoriteProduct` / `useRemoveFavoriteProduct`). Save toggle is a
+> heart on ProductDetail; the Saved → Products segment (ClientAccountScreen) renders + un-saves them.
+> ⚠️ Requires the `product_favorites` table migration (`supabase/migrations/20260613000000_*`).
+> See **[`PRODUCT_FAVORITES_API.md`](../backend/docs/PRODUCT_FAVORITES_API.md)** in the backend repo —
+> this feature is **not yet in the salon web admin panel** and will need a UI there to stay in sync.
 
 ---
 
 ## 🧴 Products — `/api/v1/products`
-File: `backend/app/api/products.py`
+File: `backend/app/api/products.py` · Mobile hooks: `src/services/api/hooks/useProductsAPI.ts`
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| GET | `/products` | public | — | ProductCatalog / ClientShopping | ⬜ |
-| GET | `/products/categories` | public | — | ProductCatalog | ⬜ |
-| GET | `/products/slug/{slug}` | public | — | ProductDetail | ⬜ |
-| GET | `/products/{product_id}` | public | — | ProductDetail | ⬜ |
+| GET | `/products` | public | `useProducts` / `useFeaturedProducts` | ProductCatalog / ClientShopping | 🟢 |
+| GET | `/products/categories` | public | `useProductCategories` | ClientShopping | 🟢 |
+| GET | `/products/slug/{slug}` | public | `useProductBySlug` | — | 🟡 |
+| GET | `/products/{product_id}` | public | `useProduct` | ProductDetail | 🟢 |
 | GET | `/products/admin/all` | bearer (admin) | — | — | ➖ |
 | POST | `/products` | bearer (admin) | — | — | ➖ |
 | PUT | `/products/{product_id}` | bearer (admin) | — | — | ➖ |
@@ -217,14 +211,13 @@ File: `backend/app/api/payments.py`
 
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
-| POST | `/payments/booking/create-order` | bearer | — | Checkout | ⬜ |
-| POST | `/payments/booking/verify` | bearer | — | Checkout | ⬜ |
 | POST | `/payments/cart/create-order` | bearer | `useCreateCartOrder` | Checkout (Razorpay WebView) | 🟢 |
 | POST | `/payments/registration/create-order` | bearer (vendor) | — | — | ⬜ |
 | POST | `/payments/registration/verify` | bearer (vendor) | — | — | ⬜ |
-| GET | `/payments/history` | bearer | — | ClientAccount | ⬜ |
-| GET | `/payments/vendor/earnings` | bearer (vendor) | — | VendorDashboard | ⬜ |
-| POST | `/payments/webhook/razorpay` | webhook | — | (server only) | ➖ |
+
+> Note: `/payments/booking/*`, `/payments/history`, `/payments/vendor/earnings`, and `/payments/webhook/razorpay`
+> were removed from the backend. The cart checkout payment flow (`/payments/cart/create-order` →
+> `/customers/cart/checkout`) is the canonical booking payment path.
 
 ---
 
@@ -246,7 +239,6 @@ File: `backend/app/api/vendors.py`
 | POST | `/vendors/promotions/apply` | bearer | — | — | ⬜ |
 | GET | `/vendors/bookings` | bearer | — | VendorBookings | ⬜ |
 | PUT | `/vendors/bookings/{booking_id}/status` | bearer | — | VendorBookings | ⬜ |
-| GET | `/vendors/dashboard` | bearer | — | VendorDashboard | ⬜ |
 | GET | `/vendors/analytics` | bearer | — | VendorDashboard | ⬜ |
 
 ---
@@ -262,12 +254,10 @@ File: `backend/app/api/rm.py`
 | GET | `/rm/vendor-requests` | bearer (rm) | — | — | ⬜ |
 | GET | `/rm/vendor-requests/{request_id}` | bearer (rm) | — | — | ⬜ |
 | GET | `/rm/salons` | bearer (rm) | — | RMHome | ⬜ |
-| GET | `/rm/profile` | bearer (rm) | — | RMHome | ⬜ |
 | PUT | `/rm/profile` | bearer (rm) | — | — | ⬜ |
 | GET | `/rm/score-history` | bearer (rm) | — | — | ⬜ |
 | GET | `/rm/dashboard` | bearer (rm) | — | RMHome | ⬜ |
 | GET | `/rm/leaderboard` | bearer (rm) | — | — | ⬜ |
-| GET | `/rm/service-categories` | bearer (rm) | — | — | ⬜ |
 
 ---
 
@@ -279,7 +269,6 @@ File: `backend/app/api/careers.py`
 | POST | `/careers/apply` | public | — | (careers feature) | ⬜ |
 | GET | `/careers/applications` | bearer (admin) | — | — | ➖ |
 | GET | `/careers/applications/{application_id}` | bearer (admin) | — | — | ➖ |
-| GET | `/careers/applications/by-number/{number}` | public | — | — | ⬜ |
 | PATCH | `/careers/applications/{application_id}` | bearer (admin) | — | — | ➖ |
 | GET | `/careers/applications/{application_id}/download/{type}` | bearer (admin) | — | — | ➖ |
 
@@ -291,10 +280,8 @@ File: `backend/app/api/upload.py` · Mobile helper: `src/services/upload/uploadS
 | Method | Path | Auth | Hook | Screen | Status |
 |--------|------|------|------|--------|--------|
 | POST | `/upload/salon-image` | bearer (vendor) | — | — | ⬜ |
-| POST | `/upload/salon-images/multiple` | bearer (vendor) | — | — | ⬜ |
 | POST | `/upload/cloudinary-product-image` | bearer | — | — | ⬜ |
 | POST | `/upload/agreement-document` | bearer | — | — | ⬜ |
-| DELETE | `/upload/salon-image` | bearer (vendor) | — | — | ⬜ |
 | GET | `/upload/agreement-document/signed-url` | bearer | — | — | ⬜ |
 
 ---
@@ -303,7 +290,7 @@ File: `backend/app/api/upload.py` · Mobile helper: `src/services/upload/uploadS
 File: `backend/app/api/admin/` — listed for completeness; primarily consumed by `salon-admin-panel`.
 
 <details>
-<summary>Expand admin endpoints (45)</summary>
+<summary>Expand admin endpoints (41)</summary>
 
 | Method | Path | Sub-router |
 |--------|------|-----------|
@@ -319,15 +306,11 @@ File: `backend/app/api/admin/` — listed for completeness; primarily consumed b
 | PUT | `/admin/salons/{salon_id}/status` | salons |
 | POST | `/admin/salons/{salon_id}/send-payment-reminder` | salons |
 | GET | `/admin/rms` | rms |
-| GET | `/admin/rms/{rm_id}` | rms |
-| GET | `/admin/rms/{rm_id}/score-history` | rms |
 | PUT | `/admin/rms/{rm_id}` | rms |
 | GET | `/admin/vendor-requests` | vendor_requests |
-| GET | `/admin/vendor-requests/{request_id}` | vendor_requests |
 | POST | `/admin/vendor-requests/{request_id}/approve` | vendor_requests |
 | POST | `/admin/vendor-requests/{request_id}/reject` | vendor_requests |
 | GET | `/admin/bookings/` | bookings |
-| PUT | `/admin/bookings/{booking_id}/status` | bookings |
 | GET | `/admin/service-categories` | service_categories |
 | GET | `/admin/service-categories/{category_id}` | service_categories |
 | POST | `/admin/service-categories` | service_categories |
@@ -363,10 +346,19 @@ Candidates we flagged for a possible `/api/v2` or backend tweaks to better serve
 
 - [ ] **Home-feed aggregation endpoint** — combine `popular-cities` + `nearby` + `categories` into one call to cut mobile round-trips on `ClientHomeScreen`.
 - [ ] **Consistent pagination** (cursor-based) across list endpoints for infinite scroll.
-- [ ] **Canonical booking surface** — `/bookings/*` vs `/customers/bookings/*` overlap; pick one for the client app.
+- [ ] **Canonical booking surface** — `/customers/bookings/*` is the client surface; `/vendors/bookings/*` for vendors.
 - [ ] **Slimmer mobile DTOs** — some list responses may be heavier than mobile needs.
 - [ ] _(add items here as they come up)_
 
 ---
 
-_Last updated: 2026-06-08 (Customers domain completed: reviews wired + cart edit/clear + browse marked ➖ → 35/170) · Maintained jointly by the team + Claude Code._
+_Last updated: 2026-06-13 (Product favorites: new backend `/customers/favorites/products`
+GET/POST/DELETE + `product_favorites` table; wired `useFavoriteProducts`/`useAddFavoriteProduct`/
+`useRemoveFavoriteProduct` into ProductDetail (heart toggle) and the Saved tab's Products segment
+(ClientAccountScreen, previously hardcoded). Backend tests added; see backend/docs/PRODUCT_FAVORITES_API.md.
+Also fixed the 2-column product grids on Shopping + Saved tabs (were rendering one card per row).) ·
+Earlier: Products rollout phases 1–3: wired `useProductsAPI.ts` →
+ClientShopping (categories + featured), ProductCatalog (list/search/category filter),
+ProductDetail (by id), plus product-cart (add / qty / remove) on those screens + CartScreen,
+with live cart-count badges. Remaining: `clear/all` UI + product-orders checkout.) ·
+Earlier same day: audit against live backend removed 34 phantom endpoints — standalone /bookings router, /location/geocode, /payments/booking+history+earnings+webhook, dead /salons + /rm + /upload + /admin endpoints; fixed /auth/resend-verification auth to bearer; total 170→136) · Maintained jointly by the team + Claude Code._

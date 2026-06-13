@@ -17,23 +17,20 @@ import {
   favoriteSalonId,
   type FavoriteItem,
 } from '@/services/api/hooks/useCustomerAPI';
+import {
+  useFavoriteProducts,
+  useRemoveFavoriteProduct,
+  effectivePrice,
+  formatPrice,
+  productImageUri,
+  type Product,
+} from '@/services/api/hooks/useProductsAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 
 const avatar = require('@/assets/home/avatar.png');
 const fallbackSalon = require('@/assets/home/top-lumina.png');
-const loreal = require('@/assets/catalog/loreal.png');
-const olaplex = require('@/assets/catalog/olaplex.png');
-const moroccanoil = require('@/assets/catalog/moroccanoil.png');
-
-// Placeholder until a product-favorites endpoint exists.
-type SavedProduct = { id: string; brand: string; desc: string; size: string; price: string; image: number };
-const savedProducts: SavedProduct[] = [
-  { id: 'sp1', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-  { id: 'sp2', brand: 'Olaplex', desc: 'No. 4 Bond Maintenance', size: '250ml', price: '₹2950', image: olaplex },
-  { id: 'sp3', brand: 'Moroccanoil', desc: 'Hydrating Shampoo', size: '500ml', price: '₹1850', image: moroccanoil },
-  { id: 'sp4', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-];
+const productFallback = require('@/assets/catalog/loreal.png');
 
 type Tab = 'salons' | 'products';
 
@@ -73,6 +70,14 @@ export function ClientAccountScreen() {
   const favoritesQuery = useFavorites(canFavorite);
   const { mutate: removeFavorite, isPending: isRemoving } = useRemoveFavorite();
   const favorites = favoritesQuery.data?.favorites ?? [];
+
+  const productFavoritesQuery = useFavoriteProducts(canFavorite);
+  const { mutate: removeFavoriteProduct, isPending: isRemovingProduct } =
+    useRemoveFavoriteProduct();
+  const favoriteProducts = productFavoritesQuery.data?.favorites ?? [];
+
+  const openProduct = (p: Product) =>
+    parent?.navigate('ProductDetail', { productId: p.id, productName: p.brand ?? p.name });
 
   const openSalon = (s: FavoriteItem) =>
     parent?.navigate('SalonDetails', {
@@ -177,6 +182,85 @@ export function ClientAccountScreen() {
     );
   };
 
+  const renderProducts = () => {
+    if (!canFavorite) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="bag-handle-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>Sign in to see your saved products</Text>
+          <Pressable onPress={() => parent?.navigate('Profile')} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Go to Profile</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (productFavoritesQuery.isLoading) {
+      return (
+        <View style={styles.state}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      );
+    }
+    if (productFavoritesQuery.isError) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateSubtitle}>Couldn't load your saved products.</Text>
+          <Pressable onPress={() => productFavoritesQuery.refetch()} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favoriteProducts.length === 0) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="bag-handle-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>No saved products yet</Text>
+          <Text style={styles.stateSubtitle}>Tap the heart on a product to save it here.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.grid}>
+        {favoriteProducts.map((product) => {
+          const uri = productImageUri(product);
+          return (
+            <Pressable
+              key={product.id}
+              onPress={() => openProduct(product)}
+              style={styles.productCard}
+            >
+              <View style={styles.productImageWrap}>
+                <Image
+                  source={uri ? { uri } : productFallback}
+                  style={styles.productImage}
+                />
+                <Pressable
+                  disabled={isRemovingProduct}
+                  hitSlop={8}
+                  onPress={() => removeFavoriteProduct(product.id)}
+                  style={styles.productFav}
+                >
+                  <Ionicons color={colors.gold} name="heart" size={14} />
+                </Pressable>
+              </View>
+              <Text style={styles.productBrand}>{product.brand ?? product.name}</Text>
+              <Text numberOfLines={2} style={styles.productDesc}>
+                {product.short_description ?? product.name}
+              </Text>
+              {product.weight ? <Text style={styles.productSize}>{product.weight}</Text> : null}
+              <Text style={styles.productPrice}>{formatPrice(effectivePrice(product))}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.header}>
@@ -204,30 +288,7 @@ export function ClientAccountScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {tab === 'salons' ? (
-          renderBody()
-        ) : (
-          <View style={styles.grid}>
-            {savedProducts.map((product) => (
-              <Pressable
-                key={product.id}
-                onPress={() => parent?.navigate('ProductDetail', { productName: product.brand })}
-                style={styles.productCard}
-              >
-                <View style={styles.productImageWrap}>
-                  <Image source={product.image} style={styles.productImage} />
-                  <View style={styles.productFav}>
-                    <Ionicons color={colors.gold} name="heart" size={14} />
-                  </View>
-                </View>
-                <Text style={styles.productBrand}>{product.brand}</Text>
-                <Text style={styles.productDesc}>{product.desc}</Text>
-                <Text style={styles.productSize}>{product.size}</Text>
-                <Text style={styles.productPrice}>{product.price}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {tab === 'salons' ? renderBody() : renderProducts()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -428,16 +489,16 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    justifyContent: 'space-between',
+    rowGap: 12,
   },
   productCard: {
     borderColor: colors.cardBorder,
     borderRadius: 8,
     borderWidth: 1,
     gap: 2,
-    margin: 6,
     padding: 8,
-    width: '47%',
+    width: '48%',
   },
   productImageWrap: {
     marginBottom: 6,
