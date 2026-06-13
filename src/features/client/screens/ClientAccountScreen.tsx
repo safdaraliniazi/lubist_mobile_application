@@ -3,24 +3,36 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auraWellness, luminaStudio, theGlowRoom } from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
-  SalonRouteData,
 } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
-import { useLogout } from '@/services/api/hooks/useAuthAPI';
+import {
+  useFavorites,
+  useRemoveFavorite,
+  favoriteSalonId,
+  type FavoriteItem,
+} from '@/services/api/hooks/useCustomerAPI';
+import {
+  useFavoriteProducts,
+  useRemoveFavoriteProduct,
+  effectivePrice,
+  formatPrice,
+  productImageUri,
+  type Product,
+} from '@/services/api/hooks/useProductsAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 
-const topLumina = require('@/assets/home/top-lumina.png');
-const topAura = require('@/assets/home/top-aura.png');
-const nearbyGlow = require('@/assets/home/nearby-glow.png');
-const loreal = require('@/assets/catalog/loreal.png');
-const olaplex = require('@/assets/catalog/olaplex.png');
-const moroccanoil = require('@/assets/catalog/moroccanoil.png');
+const avatar = require('@/assets/home/avatar.png');
+const fallbackSalon = require('@/assets/home/top-lumina.png');
+const productFallback = require('@/assets/catalog/loreal.png');
+
+type Tab = 'salons' | 'products';
 
 const colors = {
   bg: '#FFFAF5',
@@ -42,80 +54,219 @@ const colors = {
   segmentBg: '#F0E0D1',
 };
 
-type SavedSalon = {
-  id: string;
-  data: SalonRouteData;
-  image: number;
-  location: string;
-  chips: string[];
-};
-
-const savedSalons: SavedSalon[] = [
-  {
-    id: 'sv1',
-    data: luminaStudio,
-    image: topLumina,
-    location: 'Downtown Ave • 1.2 km',
-    chips: ['UNISEX', 'HAIR & SPA'],
-  },
-  {
-    id: 'sv2',
-    data: auraWellness,
-    image: topAura,
-    location: 'Westside District • 2.5 km',
-    chips: ['UNISEX', 'MASSAGE'],
-  },
-  {
-    id: 'sv3',
-    data: theGlowRoom,
-    image: nearbyGlow,
-    location: 'Park Lane • 3.1 km',
-    chips: ['UNISEX', 'SKIN'],
-  },
-];
-
-type SavedProduct = {
-  id: string;
-  brand: string;
-  desc: string;
-  size: string;
-  price: string;
-  image: number;
-};
-
-const savedProducts: SavedProduct[] = [
-  { id: 'sp1', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-  { id: 'sp2', brand: 'Olaplex', desc: 'No. 4 Bond Maintenance', size: '250ml', price: '₹2950', image: olaplex },
-  { id: 'sp3', brand: 'Moroccanoil', desc: 'Hydrating Shampoo', size: '500ml', price: '₹1850', image: moroccanoil },
-  { id: 'sp4', brand: "L'Oreal Paris", desc: 'Hyaluron Moisture Anti-frizz', size: '1L', price: '₹986', image: loreal },
-];
-
-type Tab = 'salons' | 'products';
 type SavedNavigation = BottomTabNavigationProp<ClientTabParamList>;
+
+function salonLocation(s: FavoriteItem) {
+  return [s.city, s.state].filter(Boolean).join(', ') || 'Salon';
+}
 
 export function ClientAccountScreen() {
   const navigation = useNavigation<SavedNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
+  const { isAuthenticated, user } = useAuth();
+  const canFavorite = isAuthenticated && !user?.guest;
   const [tab, setTab] = useState<Tab>('salons');
-  
-  const { signOut } = useAuth();
-  const { mutate: logoutUser } = useLogout();
 
-  const handleLogout = () => {
-    logoutUser(undefined, {
-      onSettled: () => {
-        signOut();
-      }
+  const favoritesQuery = useFavorites(canFavorite);
+  const { mutate: removeFavorite, isPending: isRemoving } = useRemoveFavorite();
+  const favorites = favoritesQuery.data?.favorites ?? [];
+
+  const productFavoritesQuery = useFavoriteProducts(canFavorite);
+  const { mutate: removeFavoriteProduct, isPending: isRemovingProduct } =
+    useRemoveFavoriteProduct();
+  const favoriteProducts = productFavoritesQuery.data?.favorites ?? [];
+
+  const openProduct = (p: Product) =>
+    parent?.navigate('ProductDetail', { productId: p.id, productName: p.brand ?? p.name });
+
+  const openSalon = (s: FavoriteItem) =>
+    parent?.navigate('SalonDetails', {
+      salon: {
+        id: favoriteSalonId(s) ?? '',
+        name: s.business_name ?? 'Salon',
+        location: salonLocation(s),
+        rating: displayRating(s.average_rating, s.total_reviews).label,
+        reviewCount: s.total_reviews ?? 0,
+        heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+      },
     });
+
+  const renderBody = () => {
+    if (!canFavorite) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="heart-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>Sign in to see your saved salons</Text>
+          <Pressable onPress={() => parent?.navigate('Profile')} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Go to Profile</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favoritesQuery.isLoading) {
+      return (
+        <View style={styles.state}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      );
+    }
+    if (favoritesQuery.isError) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateSubtitle}>Couldn't load your saved salons.</Text>
+          <Pressable onPress={() => favoritesQuery.refetch()} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favorites.length === 0) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="heart-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>No saved salons yet</Text>
+          <Text style={styles.stateSubtitle}>Tap the heart on a salon to save it here.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.salonList}>
+        {favorites.map((salon) => {
+          const id = favoriteSalonId(salon) ?? '';
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          return (
+            <Pressable key={id} onPress={() => openSalon(salon)} style={styles.salonCard}>
+              <View style={styles.salonImageWrap}>
+                <Image source={remote ? { uri: remote } : fallbackSalon} style={styles.salonImage} />
+                <Pressable
+                  disabled={isRemoving}
+                  hitSlop={8}
+                  onPress={() => removeFavorite(id)}
+                  style={styles.salonFav}
+                >
+                  <Ionicons color={colors.gold} name="heart" size={18} />
+                </Pressable>
+              </View>
+              <View style={styles.salonContent}>
+                <View style={styles.salonTitleRow}>
+                  <Text style={styles.salonName}>{salon.business_name ?? 'Salon'}</Text>
+                  <View style={styles.salonRating}>
+                    <Ionicons color={colors.gold} name="star" size={12} />
+                    <Text style={styles.salonRatingText}>
+                      {displayRating(salon.average_rating, salon.total_reviews).label}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.salonMeta}>
+                  <Ionicons color={colors.text} name="location-outline" size={14} />
+                  <Text style={styles.salonMetaText}>{salonLocation(salon)}</Text>
+                </View>
+                {salon.salon_type ? (
+                  <View style={styles.salonChips}>
+                    <View style={styles.salonChip}>
+                      <Text style={styles.salonChipText}>
+                        {salon.salon_type.replace(/_/g, ' ').toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderProducts = () => {
+    if (!canFavorite) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="bag-handle-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>Sign in to see your saved products</Text>
+          <Pressable onPress={() => parent?.navigate('Profile')} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Go to Profile</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (productFavoritesQuery.isLoading) {
+      return (
+        <View style={styles.state}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      );
+    }
+    if (productFavoritesQuery.isError) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateSubtitle}>Couldn't load your saved products.</Text>
+          <Pressable onPress={() => productFavoritesQuery.refetch()} style={styles.stateBtn}>
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (favoriteProducts.length === 0) {
+      return (
+        <View style={styles.state}>
+          <View style={styles.stateIcon}>
+            <Ionicons color={colors.gold} name="bag-handle-outline" size={26} />
+          </View>
+          <Text style={styles.stateTitle}>No saved products yet</Text>
+          <Text style={styles.stateSubtitle}>Tap the heart on a product to save it here.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.grid}>
+        {favoriteProducts.map((product) => {
+          const uri = productImageUri(product);
+          return (
+            <Pressable
+              key={product.id}
+              onPress={() => openProduct(product)}
+              style={styles.productCard}
+            >
+              <View style={styles.productImageWrap}>
+                <Image
+                  source={uri ? { uri } : productFallback}
+                  style={styles.productImage}
+                />
+                <Pressable
+                  disabled={isRemovingProduct}
+                  hitSlop={8}
+                  onPress={() => removeFavoriteProduct(product.id)}
+                  style={styles.productFav}
+                >
+                  <Ionicons color={colors.gold} name="heart" size={14} />
+                </Pressable>
+              </View>
+              <Text style={styles.productBrand}>{product.brand ?? product.name}</Text>
+              <Text numberOfLines={2} style={styles.productDesc}>
+                {product.short_description ?? product.name}
+              </Text>
+              {product.weight ? <Text style={styles.productSize}>{product.weight}</Text> : null}
+              <Text style={styles.productPrice}>{formatPrice(effectivePrice(product))}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
   };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Saved</Text>
-        <Pressable onPress={handleLogout} style={styles.logoutBtn}>
-          <Ionicons color={colors.text} name="log-out-outline" size={20} />
-          <Text style={styles.logoutText}>Log out</Text>
+        <Pressable hitSlop={8} onPress={() => parent?.navigate('Profile')}>
+          <Image source={avatar} style={styles.avatar} />
         </Pressable>
       </View>
 
@@ -124,92 +275,20 @@ export function ClientAccountScreen() {
           onPress={() => setTab('salons')}
           style={[styles.segmentButton, tab === 'salons' && styles.segmentActive]}
         >
-          <Ionicons
-            color={tab === 'salons' ? colors.white : colors.text}
-            name="heart"
-            size={14}
-          />
-          <Text style={[styles.segmentText, tab === 'salons' && styles.segmentTextActive]}>
-            Salons
-          </Text>
+          <Ionicons color={tab === 'salons' ? colors.white : colors.text} name="heart" size={14} />
+          <Text style={[styles.segmentText, tab === 'salons' && styles.segmentTextActive]}>Salons</Text>
         </Pressable>
         <Pressable
           onPress={() => setTab('products')}
           style={[styles.segmentButton, tab === 'products' && styles.segmentActive]}
         >
-          <Ionicons
-            color={tab === 'products' ? colors.white : colors.text}
-            name="bag-handle"
-            size={14}
-          />
-          <Text style={[styles.segmentText, tab === 'products' && styles.segmentTextActive]}>
-            Products
-          </Text>
+          <Ionicons color={tab === 'products' ? colors.white : colors.text} name="bag-handle" size={14} />
+          <Text style={[styles.segmentText, tab === 'products' && styles.segmentTextActive]}>Products</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {tab === 'salons' ? (
-          <View style={styles.salonList}>
-            {savedSalons.map((salon) => (
-              <Pressable
-                key={salon.id}
-                onPress={() => parent?.navigate('SalonDetails', { salon: salon.data })}
-                style={styles.salonCard}
-              >
-                <View style={styles.salonImageWrap}>
-                  <Image source={salon.image} style={styles.salonImage} />
-                  <View style={styles.salonFav}>
-                    <Ionicons color={colors.gold} name="heart" size={18} />
-                  </View>
-                </View>
-                <View style={styles.salonContent}>
-                  <View style={styles.salonTitleRow}>
-                    <Text style={styles.salonName}>{salon.data.name}</Text>
-                    <View style={styles.salonRating}>
-                      <Ionicons color={colors.gold} name="star" size={12} />
-                      <Text style={styles.salonRatingText}>{salon.data.rating}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.salonMeta}>
-                    <Ionicons color={colors.text} name="location-outline" size={14} />
-                    <Text style={styles.salonMetaText}>{salon.location}</Text>
-                  </View>
-                  <View style={styles.salonChips}>
-                    {salon.chips.map((chip, index) => (
-                      <View key={chip} style={styles.salonChip}>
-                        <Text style={[styles.salonChipText, index === 0 && styles.salonChipUnisex]}>
-                          {chip}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            {savedProducts.map((product) => (
-              <Pressable
-                key={product.id}
-                onPress={() => parent?.navigate('ProductDetail', { productName: product.brand })}
-                style={styles.productCard}
-              >
-                <View style={styles.productImageWrap}>
-                  <Image source={product.image} style={styles.productImage} />
-                  <View style={styles.productFav}>
-                    <Ionicons color={colors.gold} name="heart" size={14} />
-                  </View>
-                </View>
-                <Text style={styles.productBrand}>{product.brand}</Text>
-                <Text style={styles.productDesc}>{product.desc}</Text>
-                <Text style={styles.productSize}>{product.size}</Text>
-                <Text style={styles.productPrice}>{product.price}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {tab === 'salons' ? renderBody() : renderProducts()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -239,14 +318,49 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: -0.2,
   },
-  logoutBtn: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
+  avatar: {
+    borderColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 40,
+    width: 40,
   },
-  logoutText: {
+  state: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 32,
+    paddingTop: 96,
+  },
+  stateIcon: {
+    alignItems: 'center',
+    backgroundColor: '#FDEDDF',
+    borderRadius: 20,
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
+  },
+  stateTitle: {
+    color: colors.heading,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
     color: colors.text,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  stateBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: 24,
+    marginTop: 4,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  stateBtnText: {
+    color: colors.white,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
   segment: {
@@ -375,16 +489,16 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    justifyContent: 'space-between',
+    rowGap: 12,
   },
   productCard: {
     borderColor: colors.cardBorder,
     borderRadius: 8,
     borderWidth: 1,
     gap: 2,
-    margin: 6,
     padding: 8,
-    width: '47%',
+    width: '48%',
   },
   productImageWrap: {
     marginBottom: 6,

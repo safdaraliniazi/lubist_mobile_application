@@ -2,13 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
-
-const glowStudio = require('@/assets/checkout/glow-studio.png');
+import { useAuth } from '@/store/AuthContext';
+import {
+  useCart,
+  useCreateCartOrder,
+  useCheckoutCart,
+  useUpdateCartItem,
+  useRemoveCartItem,
+  useClearCart,
+  type RazorpayOrder,
+} from '@/services/api/hooks/useBookingAPI';
+import { RazorpayCheckout, type RazorpaySuccess } from '@/features/client/components/RazorpayCheckout';
 
 const colors = {
   bg: '#FFFAF5',
@@ -18,37 +26,115 @@ const colors = {
   card: '#FFF6EC',
   gold: '#F89E07',
   text: '#534433',
-  thumbBg: '#EDE1D2',
   datePill: '#FCEBDC',
   divider: 'rgba(217, 195, 173, 0.3)',
-  couponBorder: 'rgba(248, 158, 7, 0.2)',
-  couponTitle: '#2C2C2C',
   white: '#FFFFFF',
-  inputBorder: 'rgba(217, 195, 173, 0.7)',
-  placeholder: '#9CA3AF',
-  selectedCardBg: 'rgba(248, 158, 7, 0.05)',
-  badgeBg: '#F6E5D7',
-  radioEmpty: '#D9C3AD',
   ctaBorder: 'rgba(217, 195, 173, 0.45)',
   payDivider: 'rgba(255, 255, 255, 0.6)',
+  disabled: '#C7C7C7',
+  muted: '#8E98A8',
 };
-
-type PaymentMethod = 'card' | 'upi' | 'paytm';
-
-const methods: { id: PaymentMethod; label: string; sub?: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'card', label: '•••• 4242', sub: 'Expires 12/25', icon: 'card-outline' },
-  { id: 'upi', label: 'UPI', icon: 'phone-portrait-outline' },
-  { id: 'paytm', label: 'Paytm', icon: 'wallet-outline' },
-];
 
 type Navigation = NativeStackNavigationProp<ClientStackParamList>;
 type Route = RouteProp<ClientStackParamList, 'Checkout'>;
 
+const priceText = (v?: number | null) => (v == null ? '—' : `₹${Math.round(v)}`);
+
+function formatDate(ymd: string) {
+  const d = new Date(`${ymd}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export function CheckoutScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const service = route.params?.serviceName ?? 'Haircut & Styling';
-  const [method, setMethod] = useState<PaymentMethod>('card');
+  const { salonId, salonName, bookingDate, timeSlots } = route.params;
+  const { user } = useAuth();
+
+  const cart = useCart();
+  const { mutate: createOrder, isPending: isCreatingOrder } = useCreateCartOrder();
+  const { mutate: checkout, isPending: isCheckingOut } = useCheckoutCart();
+  const { mutate: updateCartItem, isPending: isUpdatingItem } = useUpdateCartItem();
+  const { mutate: removeCartItem, isPending: isRemovingItem } = useRemoveCartItem();
+  const { mutate: clearCart, isPending: isClearingCart } = useClearCart();
+
+  const [order, setOrder] = useState<RazorpayOrder | null>(null);
+  const [payVisible, setPayVisible] = useState(false);
+
+  const items = cart.data?.items ?? [];
+  const serviceTotal = cart.data?.total_amount ?? 0;
+  const displaySalon = salonName ?? cart.data?.salon_name ?? 'Salon';
+  const cartBusy = isUpdatingItem || isRemovingItem || isClearingCart;
+  const busy = isCreatingOrder || isCheckingOut;
+
+  const changeQty = (itemId: string, current: number, delta: number) => {
+    const next = current + delta;
+    if (next < 1) {
+      removeCartItem(itemId, {
+        onError: (err: any) => Alert.alert('Error', err.message || 'Could not update cart.'),
+      });
+      return;
+    }
+    updateCartItem(
+      { itemId, quantity: next },
+      { onError: (err: any) => Alert.alert('Error', err.message || 'Could not update cart.') },
+    );
+  };
+
+  const confirmClear = () => {
+    Alert.alert('Clear cart', 'Remove all services from your cart?', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () =>
+          clearCart(undefined, {
+            onSuccess: () => navigation.goBack(),
+            onError: (err: any) => Alert.alert('Error', err.message || 'Could not clear cart.'),
+          }),
+      },
+    ]);
+  };
+
+  const startPayment = () => {
+    createOrder(undefined, {
+      onSuccess: (created) => {
+        setOrder(created);
+        setPayVisible(true);
+      },
+      onError: (err: any) => Alert.alert('Payment error', err.message || 'Could not start payment.'),
+    });
+  };
+
+  const handlePaymentSuccess = (result: RazorpaySuccess) => {
+    setPayVisible(false);
+    checkout(
+      {
+        booking_date: bookingDate,
+        time_slots: timeSlots,
+        razorpay_order_id: result.razorpay_order_id,
+        razorpay_payment_id: result.razorpay_payment_id,
+        razorpay_signature: result.razorpay_signature,
+        payment_method: 'razorpay',
+      },
+      {
+        onSuccess: (booking) => {
+          navigation.navigate('BookingConfirmed', {
+            bookingNumber: booking?.booking_number,
+            salonName: displaySalon,
+            bookingDate,
+            timeSlots,
+          });
+        },
+        onError: (err: any) =>
+          Alert.alert(
+            'Booking failed',
+            err.message || 'Payment went through but the booking could not be confirmed. Please contact support.',
+          ),
+      },
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -61,120 +147,131 @@ export function CheckoutScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <View style={styles.thumb}>
-            <Image source={glowStudio} style={styles.thumbImage} />
+          <View style={styles.summaryIcon}>
+            <Ionicons color={colors.gold} name="storefront-outline" size={26} />
           </View>
-          <Text style={styles.salonName}>Glow Studio</Text>
-          <Text style={styles.salonService}>{service}</Text>
+          <Text style={styles.salonName}>{displaySalon}</Text>
+          <Text style={styles.salonService}>
+            {items.length} {items.length === 1 ? 'service' : 'services'}
+          </Text>
           <View style={styles.datePill}>
             <Ionicons color={colors.gold} name="calendar-outline" size={13} />
-            <Text style={styles.datePillText}>Date: Oct 24, 2024 | Time: 4:30 PM</Text>
+            <Text style={styles.datePillText}>
+              {formatDate(bookingDate)} • {timeSlots.join(', ')}
+            </Text>
           </View>
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.sectionTitle}>PRICE BREAKDOWN</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>YOUR SERVICES</Text>
+            {items.length > 0 ? (
+              <Pressable disabled={cartBusy} hitSlop={8} onPress={confirmClear}>
+                <Text style={styles.clearText}>Clear all</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.priceCard}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Subtotal</Text>
-              <Text style={styles.priceValue}>$65.00</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tax</Text>
-              <Text style={styles.priceValue}>$5.20</Text>
-            </View>
+            {items.map((item) => (
+              <View key={item.id} style={styles.serviceRow}>
+                <View style={styles.serviceInfo}>
+                  <Text numberOfLines={1} style={styles.priceLabel}>
+                    {item.service_details?.name ?? 'Service'}
+                  </Text>
+                  <Text style={styles.priceValue}>{priceText(item.line_total)}</Text>
+                </View>
+                <View style={styles.serviceControls}>
+                  <View style={styles.stepper}>
+                    <Pressable
+                      disabled={cartBusy}
+                      hitSlop={4}
+                      onPress={() => changeQty(item.id, item.quantity, -1)}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons color={colors.heading} name="remove" size={14} />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{item.quantity}</Text>
+                    <Pressable
+                      disabled={cartBusy}
+                      hitSlop={4}
+                      onPress={() => changeQty(item.id, item.quantity, 1)}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons color={colors.heading} name="add" size={14} />
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    disabled={cartBusy}
+                    hitSlop={6}
+                    onPress={() => removeCartItem(item.id)}
+                    style={styles.removeBtn}
+                  >
+                    <Ionicons color={colors.muted} name="trash-outline" size={16} />
+                  </Pressable>
+                </View>
+              </View>
+            ))}
             <View style={styles.priceDivider} />
             <View style={styles.priceRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>$70.20</Text>
+              <Text style={styles.totalLabel}>Service Total</Text>
+              <Text style={styles.totalValue}>{priceText(serviceTotal)}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.block}>
-          <Text style={[styles.sectionTitle, styles.couponHeading]}>AVAILABLE COUPONS</Text>
-          <LinearGradient
-            colors={[colors.card, colors.datePill]}
-            end={{ x: 0.2, y: 1 }}
-            start={{ x: 0, y: 0 }}
-            style={styles.couponCard}
-          >
-            <View style={styles.couponTopRow}>
-              <Ionicons color={colors.gold} name="pricetag" size={16} />
-              <Text style={styles.couponTitle}>Flat 10% OFF</Text>
-            </View>
-            <Text style={styles.couponSubtitle}>On all services with online payment.</Text>
-          </LinearGradient>
+        <View style={styles.noteCard}>
+          <Ionicons color={colors.gold} name="information-circle-outline" size={18} />
+          <Text style={styles.noteText}>
+            You pay a small convenience fee + GST online now to confirm the booking. The service
+            amount ({priceText(serviceTotal)}) is paid at the salon after your appointment.
+          </Text>
         </View>
 
-        <View style={styles.couponInput}>
-          <TextInput
-            placeholder="Enter coupon code"
-            placeholderTextColor={colors.placeholder}
-            style={styles.couponInputText}
-          />
-          <Pressable style={styles.applyButton}>
-            <Text style={styles.applyText}>APPLY</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.sectionTitle}>PAYMENT METHOD</Text>
-          <View style={styles.methodList}>
-            {methods.map((item) => {
-              const isSelected = item.id === method;
-
-              return (
-                <Pressable
-                  key={item.id}
-                  onPress={() => setMethod(item.id)}
-                  style={[styles.methodRow, isSelected && styles.methodRowSelected]}
-                >
-                  <View style={styles.methodLeft}>
-                    <View style={styles.methodBadge}>
-                      <Ionicons color={colors.heading} name={item.icon} size={16} />
-                    </View>
-                    <View>
-                      <Text style={styles.methodLabel}>{item.label}</Text>
-                      {item.sub ? <Text style={styles.methodSub}>{item.sub}</Text> : null}
-                    </View>
-                  </View>
-                  <View style={[styles.radio, isSelected && styles.radioSelected]}>
-                    {isSelected ? <View style={styles.radioDot} /> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Pressable style={styles.addPayment}>
-            <Ionicons color={colors.text} name="add" size={18} />
-            <Text style={styles.addPaymentText}>Add new payment method</Text>
-          </Pressable>
+        <View style={styles.payMethodCard}>
+          <Ionicons color={colors.heading} name="shield-checkmark-outline" size={18} />
+          <Text style={styles.payMethodText}>Secure payment via Razorpay — UPI, cards & wallets</Text>
         </View>
       </ScrollView>
 
       <View style={styles.ctaShell}>
         <Pressable
-          onPress={() => navigation.navigate('BookingConfirmed', { serviceName: service })}
-          style={styles.payButton}
+          disabled={busy || items.length === 0}
+          onPress={startPayment}
+          style={[styles.payButton, (busy || items.length === 0) && styles.payButtonDisabled]}
         >
-          <Text style={styles.payText}>PAY NOW</Text>
-          <View style={styles.payRight}>
-            <Text style={styles.payDivider}>|</Text>
-            <Text style={styles.payAmount}>$70.20</Text>
-          </View>
+          {busy ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <>
+              <Text style={styles.payText}>PROCEED TO PAYMENT</Text>
+              <Ionicons color={colors.white} name="arrow-forward" size={18} />
+            </>
+          )}
         </Pressable>
       </View>
+
+      <RazorpayCheckout
+        visible={payVisible}
+        order={order}
+        description={`Booking at ${displaySalon}`}
+        prefill={{
+          name: user?.full_name,
+          email: user?.email,
+          contact: (user?.phone ?? '').replace(/^\+/, ''),
+        }}
+        onSuccess={handlePaymentSuccess}
+        onDismiss={() => setPayVisible(false)}
+        onError={(msg) => {
+          setPayVisible(false);
+          Alert.alert('Payment failed', msg);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: colors.bg,
-    flex: 1,
-  },
+  safeArea: { backgroundColor: colors.bg, flex: 1 },
   headerWrap: {
     alignItems: 'center',
     backgroundColor: colors.header,
@@ -193,251 +290,83 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
   },
-  headerTitle: {
-    color: colors.heading,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 22,
-    letterSpacing: -0.44,
-  },
-  scrollContent: {
-    gap: 23,
-    paddingBottom: 140,
-    paddingHorizontal: 17,
-    paddingTop: 16,
-  },
+  headerTitle: { color: colors.heading, fontFamily: 'Montserrat_600SemiBold', fontSize: 22, letterSpacing: -0.44 },
+  scrollContent: { gap: 23, paddingBottom: 130, paddingHorizontal: 17, paddingTop: 16 },
   summaryCard: {
     alignItems: 'center',
     backgroundColor: colors.card,
     borderColor: colors.gold,
     borderRadius: 8,
     borderWidth: 1,
-    elevation: 3,
     gap: 8,
     padding: 16,
-    shadowColor: 'rgba(44, 44, 44, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
   },
-  thumb: {
-    backgroundColor: colors.thumbBg,
-    borderRadius: 12,
-    height: 64,
-    overflow: 'hidden',
-    width: 64,
+  summaryIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.datePill,
+    borderRadius: 16,
+    height: 56,
+    justifyContent: 'center',
+    width: 56,
   },
-  thumbImage: {
-    height: '100%',
-    width: '100%',
-  },
-  salonName: {
-    color: colors.heading,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
-  },
-  salonService: {
-    color: colors.text,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
+  salonName: { color: colors.heading, fontFamily: 'Montserrat_600SemiBold', fontSize: 20, letterSpacing: -0.2 },
+  salonService: { color: colors.text, fontFamily: 'Inter_500Medium', fontSize: 14 },
   datePill: {
     alignItems: 'center',
     backgroundColor: colors.datePill,
     borderRadius: 12,
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
     marginTop: 8,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
-  datePillText: {
-    color: colors.heading,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  block: {
-    gap: 16,
-  },
-  sectionTitle: {
-    color: colors.heading,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    letterSpacing: 1.4,
-    paddingHorizontal: 4,
-  },
-  priceCard: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    elevation: 3,
-    gap: 12,
-    padding: 16,
-    shadowColor: 'rgba(44, 44, 44, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-  },
-  priceRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  priceLabel: {
-    color: colors.text,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-  },
-  priceValue: {
-    color: colors.heading,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-  },
-  priceDivider: {
-    backgroundColor: colors.divider,
-    height: 1,
-  },
-  totalLabel: {
-    color: colors.heading,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
-  },
-  totalValue: {
-    color: colors.gold,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
-  },
-  couponHeading: {
-    color: colors.text,
-  },
-  couponCard: {
-    borderColor: colors.couponBorder,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 8,
-    padding: 16,
-    width: 240,
-  },
-  couponTopRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  couponTitle: {
-    color: colors.couponTitle,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-  },
-  couponSubtitle: {
-    color: colors.text,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 15.6,
-  },
-  couponInput: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderColor: colors.inputBorder,
-    borderRadius: 14,
-    borderWidth: 1,
-    elevation: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 6,
-    paddingLeft: 12,
-    shadowColor: 'rgba(0, 0, 0, 0.05)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 2,
-  },
-  couponInputText: {
-    color: colors.heading,
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-  },
-  applyButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  applyText: {
-    color: colors.gold,
-    fontFamily: 'Montserrat_700Bold',
-    fontSize: 14,
-  },
-  methodList: {
-    gap: 12,
-  },
-  methodRow: {
+  datePillText: { color: colors.heading, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  block: { gap: 16 },
+  sectionHeaderRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  sectionTitle: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 14, letterSpacing: 1.4 },
+  clearText: { color: colors.gold, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  priceCard: { backgroundColor: colors.card, borderRadius: 8, gap: 12, padding: 16 },
+  priceRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  priceLabel: { color: colors.text, flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, paddingRight: 12 },
+  priceValue: { color: colors.heading, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  serviceRow: { gap: 8 },
+  serviceInfo: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  serviceControls: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  stepper: {
     alignItems: 'center',
     backgroundColor: colors.white,
     borderColor: colors.divider,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
   },
-  methodRowSelected: {
-    backgroundColor: colors.selectedCardBg,
-    borderColor: colors.gold,
-    borderWidth: 2,
-  },
-  methodLeft: {
-    alignItems: 'center',
+  stepperBtn: { paddingHorizontal: 10, paddingVertical: 5 },
+  stepperValue: { color: colors.heading, fontFamily: 'Inter_500Medium', fontSize: 14, minWidth: 20, textAlign: 'center' },
+  removeBtn: { padding: 4 },
+  priceDivider: { backgroundColor: colors.divider, height: 1 },
+  totalLabel: { color: colors.heading, fontFamily: 'Montserrat_600SemiBold', fontSize: 18, letterSpacing: -0.2 },
+  totalValue: { color: colors.gold, fontFamily: 'Montserrat_600SemiBold', fontSize: 18, letterSpacing: -0.2 },
+  noteCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: 12,
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
+    padding: 14,
   },
-  methodBadge: {
+  noteText: { color: colors.text, flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
+  payMethodCard: {
     alignItems: 'center',
-    backgroundColor: colors.badgeBg,
-    borderRadius: 2,
-    height: 24,
-    justifyContent: 'center',
-    width: 40,
-  },
-  methodLabel: {
-    color: colors.heading,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  methodSub: {
-    color: colors.text,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  radio: {
-    alignItems: 'center',
-    borderColor: colors.radioEmpty,
-    borderRadius: 10,
-    borderWidth: 2,
-    height: 20,
-    justifyContent: 'center',
-    width: 20,
-  },
-  radioSelected: {
-    borderColor: colors.gold,
-  },
-  radioDot: {
-    backgroundColor: colors.gold,
-    borderRadius: 5,
-    height: 10,
-    width: 10,
-  },
-  addPayment: {
-    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.divider,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    gap: 10,
+    padding: 14,
   },
-  addPaymentText: {
-    color: colors.text,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
+  payMethodText: { color: colors.text, flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13 },
   ctaShell: {
     backgroundColor: colors.bg,
     borderTopColor: colors.ctaBorder,
@@ -454,36 +383,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.gold,
     borderRadius: 12,
-    elevation: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    shadowColor: 'rgba(248, 158, 7, 0.25)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-  },
-  payText: {
-    color: colors.white,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    letterSpacing: 0.35,
-  },
-  payRight: {
-    alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
   },
-  payDivider: {
-    color: colors.payDivider,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 14,
-  },
-  payAmount: {
-    color: colors.white,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
-  },
+  payButtonDisabled: { backgroundColor: colors.disabled },
+  payText: { color: colors.white, fontFamily: 'Inter_600SemiBold', fontSize: 14, letterSpacing: 0.35 },
 });

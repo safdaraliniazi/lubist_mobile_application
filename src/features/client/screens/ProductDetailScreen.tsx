@@ -1,19 +1,36 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { useAuth } from '@/store/AuthContext';
+import {
+  discountLabel,
+  effectivePrice,
+  formatPrice,
+  originalPrice,
+  productImageUri,
+  useAddFavoriteProduct,
+  useAddToProductCart,
+  useFavoriteProducts,
+  useProduct,
+  useProductCart,
+  useRemoveFavoriteProduct,
+} from '@/services/api/hooks/useProductsAPI';
 
 const heroImg = require('@/assets/product/shampoo-hero.png');
-
-const sizes = [
-  { id: '250', label: '250ml', price: '₹1,850' },
-  { id: '500', label: '500ml', price: '₹3,200' },
-];
 
 const specs = [
   { id: 'ing', label: 'KEY INGREDIENTS', value: 'Rosemary, Biotin' },
@@ -52,8 +69,74 @@ type Route = RouteProp<ClientStackParamList, 'ProductDetail'>;
 export function ProductDetailScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const productName = route.params?.productName ?? 'Shampoo';
-  const [size, setSize] = useState('250');
+  const productId = route.params?.productId;
+  const fallbackName = route.params?.productName ?? 'Product';
+
+  const { isAuthenticated, user } = useAuth();
+  const canFavorite = isAuthenticated && !user?.guest;
+
+  const productQuery = useProduct(productId);
+  const product = productQuery.data?.product;
+
+  const cart = useProductCart();
+  const cartCount = cart.data?.item_count ?? 0;
+  const addToCart = useAddToProductCart();
+
+  const favoritesQuery = useFavoriteProducts(canFavorite);
+  const addFavorite = useAddFavoriteProduct();
+  const removeFavorite = useRemoveFavoriteProduct();
+  const isFavorited = !!product && favoritesQuery.data?.favorites.some((p) => p.id === product.id);
+  const isTogglingFavorite = addFavorite.isPending || removeFavorite.isPending;
+
+  const toggleFavorite = () => {
+    if (!product || isTogglingFavorite) return;
+    if (!canFavorite) {
+      navigation.navigate('Profile');
+      return;
+    }
+    if (isFavorited) removeFavorite.mutate(product.id);
+    else addFavorite.mutate(product.id);
+  };
+
+  const headerTitle = product?.brand ?? product?.name ?? fallbackName;
+  const heroUri = product ? productImageUri(product) : null;
+  const price = product ? effectivePrice(product) : null;
+  const original = product ? originalPrice(product) : null;
+  const discount = product ? discountLabel(product) : null;
+
+  const handleAddToBag = () => {
+    if (!product) return;
+    addToCart.mutate(
+      { product_id: product.id },
+      { onSuccess: () => navigation.navigate('Cart') },
+    );
+  };
+
+  if (productQuery.isLoading) {
+    return (
+      <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safeArea, styles.centered]}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  if (productQuery.isError || !product) {
+    return (
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Pressable onPress={() => navigation.goBack()}>
+              <Ionicons color={colors.heading} name="arrow-back" size={24} />
+            </Pressable>
+            <Text style={styles.headerTitle}>{fallbackName}</Text>
+          </View>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>Couldn’t load this product.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -62,28 +145,39 @@ export function ProductDetailScreen() {
           <Pressable onPress={() => navigation.goBack()}>
             <Ionicons color={colors.heading} name="arrow-back" size={24} />
           </Pressable>
-          <Text style={styles.headerTitle}>{productName}</Text>
+          <Text style={styles.headerTitle}>{headerTitle}</Text>
         </View>
         <Pressable onPress={() => navigation.navigate('Cart')} style={styles.cartWrap}>
           <Ionicons color={colors.heading} name="cart-outline" size={24} />
-          <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>4</Text>
-          </View>
+          {cartCount > 0 ? (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{cartCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
-          <Image resizeMode="contain" source={heroImg} style={styles.heroImage} />
+          <Image resizeMode="contain" source={heroUri ? { uri: heroUri } : heroImg} style={styles.heroImage} />
+          <Pressable
+            disabled={isTogglingFavorite}
+            hitSlop={8}
+            onPress={toggleFavorite}
+            style={styles.favFloat}
+          >
+            <Ionicons
+              color={isFavorited ? colors.gold : colors.text}
+              name={isFavorited ? 'heart' : 'heart-outline'}
+              size={18}
+            />
+          </Pressable>
           <Pressable style={styles.shareFloat}>
             <Ionicons color={colors.text} name="share-social-outline" size={18} />
           </Pressable>
         </View>
 
-        <Text style={styles.productTitle}>
-          Bond Repair & Revive Shampoo for Straighter and Shinier Hair with Argan oil Nourishes Dry
-          Hair | 1000ml
-        </Text>
+        <Text style={styles.productTitle}>{product.name}</Text>
 
         <View style={styles.ratingRow}>
           <View style={styles.ratingBadge}>
@@ -94,30 +188,22 @@ export function ProductDetailScreen() {
         </View>
 
         <View style={styles.priceRow}>
-          <Text style={styles.priceMain}>₹1,850</Text>
-          <Text style={styles.priceOriginal}>₹2,100</Text>
-          <Text style={styles.priceDiscount}>12% OFF</Text>
+          <Text style={styles.priceMain}>{price != null ? formatPrice(price) : '—'}</Text>
+          {original ? <Text style={styles.priceOriginal}>{formatPrice(original)}</Text> : null}
+          {discount ? <Text style={styles.priceDiscount}>{discount}</Text> : null}
         </View>
 
-        <Text style={styles.sectionLabel}>Select Size</Text>
-        <View style={styles.sizeRow}>
-          {sizes.map((option) => {
-            const isSelected = option.id === size;
-
-            return (
-              <Pressable
-                key={option.id}
-                onPress={() => setSize(option.id)}
-                style={[styles.sizeButton, isSelected && styles.sizeButtonSelected]}
-              >
-                <Text style={[styles.sizeLabel, !isSelected && styles.sizeLabelIdle]}>
-                  {option.label}
-                </Text>
-                <Text style={styles.sizePrice}>{option.price}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {product.weight ? (
+          <>
+            <Text style={styles.sectionLabel}>Size</Text>
+            <View style={styles.sizeRow}>
+              <View style={[styles.sizeButton, styles.sizeButtonSelected]}>
+                <Text style={styles.sizeLabel}>{product.weight}</Text>
+                <Text style={styles.sizePrice}>{price != null ? formatPrice(price) : ''}</Text>
+              </View>
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.featuresRow}>
           {features.map((feature) => (
@@ -163,10 +249,9 @@ export function ProductDetailScreen() {
             <Ionicons color={colors.muted} name="chevron-down" size={18} />
           </View>
           <Text style={styles.descBody}>
-            Elevate your hair care routine with our salon-grade Bond Repair & Revive Shampoo. This
-            meticulously crafted…
+            {product.description ?? product.short_description ?? 'No description available.'}
           </Text>
-          <Text style={styles.readMore}>Read More</Text>
+          {product.description ? <Text style={styles.readMore}>Read More</Text> : null}
         </View>
 
         <Text style={styles.blockTitle}>Customer Reviews</Text>
@@ -232,15 +317,23 @@ export function ProductDetailScreen() {
       </ScrollView>
 
       <View style={styles.ctaShell}>
-        <Pressable onPress={() => navigation.navigate('Cart')}>
+        <Pressable disabled={addToCart.isPending} onPress={handleAddToBag}>
           <LinearGradient
             colors={['#865300', colors.gold]}
             end={{ x: 1, y: 0 }}
             start={{ x: 0, y: 0 }}
-            style={styles.addToBag}
+            style={[styles.addToBag, addToCart.isPending && styles.addToBagDisabled]}
           >
-            <Ionicons color={colors.white} name="bag-handle-outline" size={18} />
-            <Text style={styles.addToBagText}>ADD TO BAG - ₹1,850</Text>
+            {addToCart.isPending ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <>
+                <Ionicons color={colors.white} name="bag-handle-outline" size={18} />
+                <Text style={styles.addToBagText}>
+                  ADD TO BAG{price != null ? ` - ${formatPrice(price)}` : ''}
+                </Text>
+              </>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
@@ -252,6 +345,16 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.bg,
     flex: 1,
+  },
+  centered: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
   },
   header: {
     alignItems: 'center',
@@ -327,6 +430,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'absolute',
     right: 12,
+    shadowColor: 'rgba(44, 44, 44, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    top: 12,
+    width: 40,
+  },
+  favFloat: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    elevation: 3,
+    height: 40,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 60,
     shadowColor: 'rgba(44, 44, 44, 0.1)',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1,
@@ -733,7 +852,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'center',
+    minHeight: 54,
     paddingVertical: 16,
+  },
+  addToBagDisabled: {
+    opacity: 0.7,
   },
   addToBagText: {
     color: colors.white,

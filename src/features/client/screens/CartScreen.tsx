@@ -2,35 +2,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { resolveImageUrl } from '@/services/api/imageUrl';
+import {
+  formatPrice,
+  useProductCart,
+  useRemoveProductCartItem,
+  useUpdateProductCartItem,
+} from '@/services/api/hooks/useProductsAPI';
 
-const lumieraImg = require('@/assets/product/shampoo-hero.png');
-const olaplexImg = require('@/assets/cart/olaplex.png');
-
-const cartItems = [
-  {
-    id: 'lumiera',
-    name: 'Lumiera Bond Repair',
-    size: '500ml',
-    price: '₹1850',
-    original: '₹2100',
-    discount: '12% off',
-    image: lumieraImg,
-  },
-  {
-    id: 'olaplex',
-    name: 'Olaplex No. 4 Shampoo',
-    size: '250ml',
-    price: '₹2950',
-    original: '₹3500',
-    discount: '15% off',
-    image: olaplexImg,
-  },
-];
+const productFallback = require('@/assets/product/shampoo-hero.png');
 
 const payments = [
   { id: 'upi', label: 'UPI (Google Pay/PhonePe)', icon: 'phone-portrait-outline' as const },
@@ -60,11 +54,19 @@ type Navigation = NativeStackNavigationProp<ClientStackParamList>;
 
 export function CartScreen() {
   const navigation = useNavigation<Navigation>();
-  const [qty, setQty] = useState<Record<string, number>>({ lumiera: 1, olaplex: 1 });
   const [payment, setPayment] = useState('upi');
 
-  const changeQty = (id: string, delta: number) =>
-    setQty((prev) => ({ ...prev, [id]: Math.max(1, (prev[id] ?? 1) + delta) }));
+  const cartQuery = useProductCart();
+  const updateItem = useUpdateProductCartItem();
+  const removeItem = useRemoveProductCartItem();
+
+  const items = cartQuery.data?.items ?? [];
+  const totalAmount = cartQuery.data?.total_amount ?? 0;
+  const itemCount = cartQuery.data?.item_count ?? 0;
+
+  // Backend clamps to available stock and removes the line at qty 0.
+  const changeQty = (itemId: string, current: number, delta: number) =>
+    updateItem.mutate({ itemId, quantity: Math.max(1, current + delta) });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -76,47 +78,71 @@ export function CartScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>YOUR BAG (2)</Text>
+        <Text style={styles.sectionLabel}>YOUR BAG ({itemCount})</Text>
 
-        <View style={styles.itemsList}>
-          {cartItems.map((item) => (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={styles.itemThumb}>
-                <Image resizeMode="contain" source={item.image} style={styles.itemImage} />
-              </View>
+        {cartQuery.isLoading ? (
+          <ActivityIndicator color={colors.gold} size="large" style={styles.loader} />
+        ) : cartQuery.isError ? (
+          <Text style={styles.emptyText}>Couldn’t load your cart. Please try again.</Text>
+        ) : items.length === 0 ? (
+          <Text style={styles.emptyText}>Your bag is empty.</Text>
+        ) : (
+          <View style={styles.itemsList}>
+            {items.map((item) => {
+              const uri = resolveImageUrl(item.image_url ?? item.image_urls?.[0] ?? null);
+              return (
+                <View key={item.id} style={styles.itemCard}>
+                  <View style={styles.itemThumb}>
+                    <Image
+                      resizeMode="contain"
+                      source={uri ? { uri } : productFallback}
+                      style={styles.itemImage}
+                    />
+                  </View>
 
-              <View style={styles.itemBody}>
-                <View style={styles.itemTitleRow}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Pressable>
-                    <Ionicons color={colors.iconMuted} name="close" size={18} />
-                  </Pressable>
-                </View>
-                <Text style={styles.itemSize}>{item.size}</Text>
+                  <View style={styles.itemBody}>
+                    <View style={styles.itemTitleRow}>
+                      <Text style={styles.itemName}>{item.name ?? 'Product'}</Text>
+                      <Pressable
+                        disabled={removeItem.isPending}
+                        onPress={() => removeItem.mutate(item.id)}
+                      >
+                        <Ionicons color={colors.iconMuted} name="close" size={18} />
+                      </Pressable>
+                    </View>
 
-                <View style={styles.itemBottomRow}>
-                  <View style={styles.itemPriceWrap}>
-                    <Text style={styles.itemPrice}>{item.price}</Text>
-                    <View style={styles.itemPriceSub}>
-                      <Text style={styles.itemOriginal}>{item.original}</Text>
-                      <Text style={styles.itemDiscount}>{item.discount}</Text>
+                    <View style={styles.itemBottomRow}>
+                      <View style={styles.itemPriceWrap}>
+                        <Text style={styles.itemPrice}>{formatPrice(item.total)}</Text>
+                        <Text style={styles.itemSize}>
+                          {formatPrice(item.price)} each
+                        </Text>
+                      </View>
+
+                      <View style={styles.stepper}>
+                        <Pressable
+                          disabled={updateItem.isPending || item.quantity <= 1}
+                          onPress={() => changeQty(item.id, item.quantity, -1)}
+                          style={styles.stepperButton}
+                        >
+                          <Ionicons color={colors.heading} name="remove" size={14} />
+                        </Pressable>
+                        <Text style={styles.stepperValue}>{item.quantity}</Text>
+                        <Pressable
+                          disabled={updateItem.isPending}
+                          onPress={() => changeQty(item.id, item.quantity, 1)}
+                          style={styles.stepperButton}
+                        >
+                          <Ionicons color={colors.heading} name="add" size={14} />
+                        </Pressable>
+                      </View>
                     </View>
                   </View>
-
-                  <View style={styles.stepper}>
-                    <Pressable onPress={() => changeQty(item.id, -1)} style={styles.stepperButton}>
-                      <Ionicons color={colors.heading} name="remove" size={14} />
-                    </Pressable>
-                    <Text style={styles.stepperValue}>{qty[item.id]}</Text>
-                    <Pressable onPress={() => changeQty(item.id, 1)} style={styles.stepperButton}>
-                      <Ionicons color={colors.heading} name="add" size={14} />
-                    </Pressable>
-                  </View>
                 </View>
-              </View>
-            </View>
-          ))}
-        </View>
+              );
+            })}
+          </View>
+        )}
 
         <View style={styles.couponCard}>
           <View style={styles.couponHeader}>
@@ -188,33 +214,29 @@ export function CartScreen() {
           <Text style={styles.sectionLabelDark}>PRICE DETAILS</Text>
           <View style={styles.priceRows}>
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Subtotal (2 items)</Text>
-              <Text style={styles.priceValue}>₹4800</Text>
+              <Text style={styles.priceLabel}>Subtotal ({itemCount} items)</Text>
+              <Text style={styles.priceValue}>{formatPrice(totalAmount)}</Text>
             </View>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Delivery Fee</Text>
               <Text style={styles.priceFree}>Free</Text>
             </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Platform Fee</Text>
-              <Text style={styles.priceValue}>₹5</Text>
-            </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceRow}>
               <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalValue}>₹4755</Text>
+              <Text style={styles.totalValue}>{formatPrice(totalAmount)}</Text>
             </View>
           </View>
         </View>
       </ScrollView>
 
       <View style={styles.ctaShell}>
-        <Pressable onPress={() => navigation.navigate('Checkout', {})}>
+        <Pressable disabled={items.length === 0} onPress={() => navigation.navigate('Tabs')}>
           <LinearGradient
             colors={['#D7A797', colors.gold]}
             end={{ x: 0.3, y: 1 }}
             start={{ x: 0, y: 0 }}
-            style={styles.ctaButton}
+            style={[styles.ctaButton, items.length === 0 && styles.ctaButtonDisabled]}
           >
             <Text style={styles.ctaText}>Proceed to Checkout</Text>
             <Ionicons color={colors.white} name="arrow-forward" size={18} />
@@ -269,6 +291,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  loader: {
+    marginTop: 32,
+  },
+  emptyText: {
+    color: colors.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    marginTop: 24,
+    textAlign: 'center',
   },
   itemsList: {
     gap: 12,
@@ -585,6 +617,9 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'center',
     paddingVertical: 16,
+  },
+  ctaButtonDisabled: {
+    opacity: 0.5,
   },
   ctaText: {
     color: colors.white,

@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
-import { useSendPhoneOtp } from '@/services/api/hooks/useAuthAPI';
+import { useSendPhoneOtp, useSendSignupPhoneOtp } from '@/services/api/hooks/useAuthAPI';
 
 // Assets exported 1:1 from Figma ("Onboarding - Vibrant Luxury").
 const logo = require('@/assets/auth/lubist-logo.png');
@@ -61,25 +61,49 @@ export function SignInScreen() {
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const [phoneNumber, setPhoneNumber] = useState('');
-  const { mutate: sendOtp, isPending } = useSendPhoneOtp();
+  const { mutate: sendLoginOtp, isPending: isLoginPending } = useSendPhoneOtp();
+  const { mutate: sendSignupOtp, isPending: isSignupPending } = useSendSignupPhoneOtp();
 
+  const isPending = isLoginPending || isSignupPending;
   const isContinueEnabled = phoneNumber.length >= 10 && !isPending;
 
-  const handleContinue = () => {
-    sendOtp(
+  // New number → fall back to the signup OTP on the same phone/OTP track (mirrors web).
+  const startSignupOtp = () => {
+    sendSignupOtp(
       { phone: phoneNumber, country_code: COUNTRY_CODE },
       {
         onSuccess: (data) => {
           navigation.navigate('OtpVerify', {
             phone: phoneNumber,
             countryCode: COUNTRY_CODE,
-            verificationId: data.verification_id
-          } as any);
+            verificationId: data.verification_id,
+            mode: 'signup',
+          });
+        },
+        onError: (error: any) => {
+          Alert.alert('Error', error.message || 'Failed to send OTP');
+        },
+      },
+    );
+  };
+
+  const handleContinue = () => {
+    sendLoginOtp(
+      { phone: phoneNumber, country_code: COUNTRY_CODE },
+      {
+        onSuccess: (data) => {
+          navigation.navigate('OtpVerify', {
+            phone: phoneNumber,
+            countryCode: COUNTRY_CODE,
+            verificationId: data.verification_id,
+            mode: 'login',
+            customerName: data.customer_name,
+          });
         },
         onError: (error: any) => {
           const errorMessage = error.message?.toLowerCase() || '';
           if (errorMessage.includes('not registered') || errorMessage.includes('404')) {
-            navigation.navigate('Signup', { phone: phoneNumber, countryCode: COUNTRY_CODE } as any);
+            startSignupOtp();
           } else if (errorMessage.includes('not verified') || errorMessage.includes('403')) {
             Alert.alert(
               'Phone Not Verified',
@@ -135,7 +159,9 @@ export function SignInScreen() {
                 <Text style={styles.emailButtonText}>Continue with Email</Text>
               </Pressable>
 
-              <LegalActions onGuest={() => signIn('client')} />
+              <LegalActions
+                onGuest={() => signIn({ role: 'client', guest: true }, { access_token: '', refresh_token: '' })}
+              />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

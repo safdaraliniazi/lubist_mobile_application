@@ -9,6 +9,7 @@ type AuthContextValue = {
   user: any | null;
   isLoading: boolean;
   signIn: (user: any, tokens: { access_token: string; refresh_token: string }) => Promise<void>;
+  updateUser: (user: any) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -48,6 +49,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await setUser(newUser);
         setUserState(newUser);
         const backendRole = newUser.user_role || newUser.role || 'client';
+        setRole(backendRole === 'customer' ? 'client' : backendRole);
+      },
+      updateUser: async (updatedUser: any) => {
+        await setUser(updatedUser);
+        setUserState(updatedUser);
+        const backendRole = updatedUser.user_role || updatedUser.role || 'client';
         setRole(backendRole === 'customer' ? 'client' : backendRole);
       },
       signOut: async () => {

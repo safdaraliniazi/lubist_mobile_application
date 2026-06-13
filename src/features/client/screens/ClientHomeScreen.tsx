@@ -3,20 +3,39 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Linking,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  auraWellness,
-  luminaStudio,
-  lumiereBeautyStudio,
-  theGlowRoom,
-} from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
+import { useDeviceLocation } from '@/services/location/useDeviceLocation';
+import {
+  useNearbySalons,
+  useReverseGeocode,
+  type NearbySalon,
+} from '@/services/api/hooks/useLocationAPI';
+import { usePublicSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
+import { useBanners, bannerImageUri, type Banner } from '@/services/api/hooks/useBannersAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
 
 // Assets exported 1:1 from Figma ("HOmescreen").
 const avatar = require('@/assets/home/avatar.png');
@@ -97,14 +116,70 @@ export function ClientHomeScreen() {
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
   const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
 
+  const { coords, permission, loading: locLoading, refetch: refetchLocation } = useDeviceLocation();
+  const { data: geo } = useReverseGeocode(coords?.latitude ?? null, coords?.longitude ?? null);
+  const nearby = useNearbySalons({
+    lat: coords?.latitude ?? null,
+    lon: coords?.longitude ?? null,
+    radius: 15,
+    limit: 10,
+  });
+
+  // Top salons: highest-rated public salons (rating, then review count).
+  const publicSalons = usePublicSalons({ limit: 50 });
+  const topSalons = useMemo(() => {
+    const list = publicSalons.data?.salons ?? [];
+    return [...list]
+      .sort(
+        (a, b) =>
+          (b.average_rating ?? 0) - (a.average_rating ?? 0) ||
+          (b.total_reviews ?? 0) - (a.total_reviews ?? 0),
+      )
+      .slice(0, 5);
+  }, [publicSalons.data]);
+
+  const openTopSalon = (s: Salon) =>
+    openSalon({
+      id: s.id,
+      name: s.business_name,
+      location: [s.city, s.state].filter(Boolean).join(', '),
+      rating: displayRating(s.average_rating, s.total_reviews).label,
+      reviewCount: s.total_reviews ?? 0,
+      heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+    });
+
+  const locationLabel = locLoading
+    ? 'Detecting your location…'
+    : permission === 'denied'
+      ? 'Location access is off'
+      : geo?.address || 'Location unavailable';
+
+  const openNearbySalon = (s: NearbySalon) => {
+    const distance = s.distance_km != null ? `${s.distance_km.toFixed(1)} km` : '';
+    openSalon({
+      id: s.id,
+      name: s.business_name,
+      location: [s.city, s.state].filter(Boolean).join(', '),
+      rating: displayRating(s.average_rating, s.total_reviews).label,
+      reviewCount: s.total_reviews ?? 0,
+      distance,
+      heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+    });
+  };
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <Header />
+      <Header
+        label={locationLabel}
+        denied={permission === 'denied'}
+        onPressLocation={refetchLocation}
+        onPressProfile={() => parent?.navigate('Profile')}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <HeroBanner />
+        <HeroCarousel />
         <SearchBar />
         <AppointmentsCard />
 
@@ -120,46 +195,139 @@ export function ClientHomeScreen() {
         </ScrollView>
         <PaginationDots activeIndex={0} count={3} />
 
-        <NearYouSection onOpen={openSalon} />
+        <NearYouSection
+          salons={nearby.data?.salons ?? []}
+          loading={nearby.isLoading}
+          isError={nearby.isError}
+          hasLocation={coords != null}
+          denied={permission === 'denied'}
+          onEnableLocation={refetchLocation}
+          onOpen={openNearbySalon}
+        />
 
         <ServicesForYou />
 
         <BeautyEssentials onOpen={openCatalog} />
 
-        <TopRatedSalons onOpen={openSalon} />
+        <TopSalonsSection
+          salons={topSalons}
+          loading={publicSalons.isLoading}
+          isError={publicSalons.isError}
+          onOpen={openTopSalon}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Header() {
+function Header({
+  label,
+  denied,
+  onPressLocation,
+  onPressProfile,
+}: {
+  label: string;
+  denied: boolean;
+  onPressLocation: () => void;
+  onPressProfile: () => void;
+}) {
   return (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
+      <Pressable style={styles.headerLeft} onPress={onPressLocation}>
         <View style={styles.locationRow}>
-          <Ionicons color={colors.gold} name="location-sharp" size={18} />
-          <Text style={styles.homeTitle}>Home</Text>
-          <Ionicons color={colors.muted} name="chevron-down" size={16} />
+          <Ionicons color={colors.gold} name="location-sharp" size={13} />
+          <Text style={styles.locationLabel}>{denied ? 'LOCATION OFF' : 'YOUR LOCATION'}</Text>
+          <Ionicons color={colors.muted} name={denied ? 'refresh' : 'chevron-down'} size={13} />
         </View>
-        <Text style={styles.addressText}>123 Beauty Lane, Manhattan,{'\n'}NY</Text>
-      </View>
+        <Text numberOfLines={1} style={styles.addressText}>{label}</Text>
+      </Pressable>
 
       <View style={styles.headerActions}>
         <Pressable style={styles.offersButton}>
           <Ionicons color={colors.gold} name="pricetag-outline" size={14} />
           <Text style={styles.offersButtonText}>Offers</Text>
         </Pressable>
-        <Image source={avatar} style={styles.avatar} />
+        <Pressable hitSlop={8} onPress={onPressProfile}>
+          <Image source={avatar} style={styles.avatar} />
+        </Pressable>
       </View>
     </View>
   );
 }
 
-function HeroBanner() {
+// Width of a full-bleed hero card: screen width minus the scroll content's
+// horizontal padding (16 each side).
+const HERO_WIDTH = Dimensions.get('window').width - 32;
+
+/**
+ * Home-screen hero carousel, driven by admin-managed banners (useBanners).
+ * Falls back to the bundled hero asset while loading or when no banners exist,
+ * so the screen never looks broken. Banners with a `link_url` are tappable.
+ */
+function HeroCarousel() {
+  const { data, isLoading } = useBanners();
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const banners = data?.banners ?? [];
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / HERO_WIDTH);
+    if (index !== activeIndex) setActiveIndex(index);
+  };
+
+  const openLink = (banner: Banner) => {
+    const url = banner.link_url?.trim();
+    if (url && /^https?:\/\//i.test(url)) {
+      Linking.openURL(url).catch(() => {});
+    }
+  };
+
+  // Fallback: bundled hero while loading or when there are no active banners.
+  if (isLoading || banners.length === 0) {
+    return (
+      <View style={styles.heroBanner}>
+        <Image source={hero} style={styles.heroImage} />
+      </View>
+    );
+  }
+
+  // Single banner: no need for a pager.
+  if (banners.length === 1) {
+    return <HeroSlide banner={banners[0]} onPress={openLink} />;
+  }
+
   return (
-    <View style={styles.heroBanner}>
-      <Image source={hero} style={styles.heroImage} />
+    <View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onScroll}
+      >
+        {banners.map((banner) => (
+          <HeroSlide key={banner.id} banner={banner} onPress={openLink} />
+        ))}
+      </ScrollView>
+      <PaginationDots activeIndex={activeIndex} count={banners.length} />
     </View>
+  );
+}
+
+function HeroSlide({ banner, onPress }: { banner: Banner; onPress: (b: Banner) => void }) {
+  const remote = bannerImageUri(banner);
+  const tappable = Boolean(banner.link_url?.trim());
+  return (
+    <Pressable
+      disabled={!tappable}
+      onPress={() => onPress(banner)}
+      style={[styles.heroBanner, { width: HERO_WIDTH }]}
+    >
+      <Image
+        source={remote ? { uri: remote } : hero}
+        style={styles.heroImage}
+        accessibilityLabel={banner.title ?? 'Promotional banner'}
+      />
+    </Pressable>
   );
 }
 
@@ -209,7 +377,83 @@ function OfferCard({ subtitle, title }: { subtitle: string; title: string }) {
   );
 }
 
-function NearYouSection({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
+function NearYouSection({
+  salons,
+  loading,
+  isError,
+  hasLocation,
+  denied,
+  onEnableLocation,
+  onOpen,
+}: {
+  salons: NearbySalon[];
+  loading: boolean;
+  isError: boolean;
+  hasLocation: boolean;
+  denied: boolean;
+  onEnableLocation: () => void;
+  onOpen: (salon: NearbySalon) => void;
+}) {
+  const fallbackImages = [nearbyLumiere, nearbyGlow];
+
+  const renderBody = () => {
+    if (denied || !hasLocation) {
+      return (
+        <Pressable onPress={onEnableLocation} style={styles.nearYouStateBox}>
+          <Ionicons color={colors.gold} name="location-outline" size={22} />
+          <Text style={styles.nearYouStateText}>
+            Turn on location to see salons near you.
+          </Text>
+          <Text style={styles.nearYouStateAction}>Enable location</Text>
+        </Pressable>
+      );
+    }
+    if (loading) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      );
+    }
+    if (isError) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>Couldn't load nearby salons.</Text>
+        </View>
+      );
+    }
+    if (salons.length === 0) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>No salons found near you yet.</Text>
+        </View>
+      );
+    }
+    return (
+      <ScrollView
+        contentContainerStyle={styles.nearYouRow}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {salons.map((salon, index) => {
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          return (
+            <NearYouCard
+              key={salon.id}
+              imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
+              location={[salon.city, salon.state].filter(Boolean).join(', ') || 'Nearby'}
+              name={salon.business_name}
+              onPress={() => onOpen(salon)}
+              pills={[salon.city].filter(Boolean) as string[]}
+              rating={displayRating(salon.average_rating, salon.total_reviews).label}
+              timing={salon.distance_km != null ? `${salon.distance_km.toFixed(1)} km` : ''}
+            />
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -220,38 +464,13 @@ function NearYouSection({ onOpen }: { onOpen: (salon: SalonRouteData) => void })
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.nearYouRow}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        <NearYouCard
-          image={nearbyLumiere}
-          location="Dubai Marina"
-          name="Lumière Beauty Studio"
-          onPress={() => onOpen(lumiereBeautyStudio)}
-          pills={['Hair', 'Nails']}
-          rating="4.9"
-          timing="Avail now"
-        />
-        <NearYouCard
-          image={nearbyGlow}
-          location="JBR"
-          name="The Glow Room"
-          onPress={() => onOpen(theGlowRoom)}
-          pills={['Skin', 'Brows']}
-          rating="4.8"
-          timing="30 min wait"
-        />
-      </ScrollView>
-
-      <PaginationDots activeIndex={0} count={3} />
+      {renderBody()}
     </View>
   );
 }
 
 function NearYouCard({
-  image,
+  imageSource,
   location,
   name,
   onPress,
@@ -259,7 +478,7 @@ function NearYouCard({
   rating,
   timing,
 }: {
-  image: number;
+  imageSource: ImageSourcePropType;
   location: string;
   name: string;
   onPress: () => void;
@@ -270,7 +489,7 @@ function NearYouCard({
   return (
     <Pressable onPress={onPress} style={styles.nearYouCard}>
       <View style={styles.nearYouImageWrap}>
-        <Image source={image} style={styles.nearYouImage} />
+        <Image source={imageSource} style={styles.nearYouImage} />
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
           locations={[0, 0.5, 1]}
@@ -294,11 +513,15 @@ function NearYouCard({
               <Ionicons color={colors.onImage} name="location-outline" size={12} />
               <Text style={styles.nearYouMetaText}>{location}</Text>
             </View>
-            <View style={styles.nearYouMetaDivider} />
-            <View style={styles.nearYouMeta}>
-              <Ionicons color={colors.onImage} name="time-outline" size={12} />
-              <Text style={styles.nearYouMetaText}>{timing}</Text>
-            </View>
+            {timing ? (
+              <>
+                <View style={styles.nearYouMetaDivider} />
+                <View style={styles.nearYouMeta}>
+                  <Ionicons color={colors.onImage} name="navigate-outline" size={12} />
+                  <Text style={styles.nearYouMetaText}>{timing}</Text>
+                </View>
+              </>
+            ) : null}
           </View>
         </View>
       </View>
@@ -364,85 +587,132 @@ function BeautyEssentials({ onOpen }: { onOpen: (category: string) => void }) {
   );
 }
 
-function TopRatedSalons({ onOpen }: { onOpen: (salon: SalonRouteData) => void }) {
+function TopSalonsSection({
+  salons,
+  loading,
+  isError,
+  onOpen,
+}: {
+  salons: Salon[];
+  loading: boolean;
+  isError: boolean;
+  onOpen: (salon: Salon) => void;
+}) {
+  const fallbackImages = [topLumina, topAura];
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      );
+    }
+    if (isError) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>Couldn't load top salons.</Text>
+        </View>
+      );
+    }
+    if (salons.length === 0) {
+      return (
+        <View style={styles.nearYouStateBox}>
+          <Text style={styles.nearYouStateText}>No salons available yet.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.topRatedList}>
+        {salons.map((salon, index) => {
+          const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+          const { hasRating, label } = displayRating(salon.average_rating, salon.total_reviews);
+          const chips = [
+            salon.salon_type ? salon.salon_type.replace(/_/g, ' ').toUpperCase() : null,
+            salon.city,
+          ].filter(Boolean) as string[];
+          return (
+            <TopSalonCard
+              key={salon.id}
+              chips={chips}
+              hasRating={hasRating}
+              imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
+              location={[salon.city, salon.state].filter(Boolean).join(', ') || 'Salon'}
+              name={salon.business_name}
+              onPress={() => onOpen(salon)}
+              rating={label}
+              reviews={salon.total_reviews ?? 0}
+            />
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, styles.topRatedHeading]}>TOP RATED SALONS</Text>
-
-      <View style={styles.topRatedList}>
-        <TopRatedCard
-          chips={['UNISEX', 'HAIR & SPA']}
-          image={topLumina}
-          location="Downtown Ave • 1.2 km"
-          name="Lumina Studio"
-          offer="40% OFF"
-          onPress={() => onOpen(luminaStudio)}
-          rating="5.0"
-        />
-        <TopRatedCard
-          chips={['UNISEX', 'MASSAGE']}
-          image={topAura}
-          location="Westside District • 2.5 km"
-          name="Aura Wellness"
-          offer="GIFT CARD DEAL"
-          onPress={() => onOpen(auraWellness)}
-          rating="4.9"
-        />
-      </View>
+      <Text style={[styles.sectionTitle, styles.topRatedHeading]}>TOP SALONS</Text>
+      {renderBody()}
     </View>
   );
 }
 
-function TopRatedCard({
+function TopSalonCard({
   chips,
-  image,
+  hasRating,
+  imageSource,
   location,
   name,
-  offer,
   onPress,
   rating,
+  reviews,
 }: {
   chips: string[];
-  image: number;
+  hasRating: boolean;
+  imageSource: ImageSourcePropType;
   location: string;
   name: string;
-  offer: string;
   onPress: () => void;
   rating: string;
+  reviews: number;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.topRatedCard}>
       <View style={styles.topRatedImageWrap}>
-        <Image source={image} style={styles.topRatedImage} />
-        <View style={styles.topRatedOffer}>
-          <Text style={styles.topRatedOfferText}>{offer}</Text>
-        </View>
-        <Pressable style={styles.topRatedFav}>
-          <Ionicons color={colors.heading} name="heart-outline" size={18} />
-        </Pressable>
+        <Image source={imageSource} style={styles.topRatedImage} />
+        {hasRating ? (
+          <View style={styles.topRatedOffer}>
+            <Text style={styles.topRatedOfferText}>★ {rating}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.topRatedContent}>
         <View style={styles.topRatedTitleRow}>
-          <Text style={styles.topRatedName}>{name}</Text>
+          <Text numberOfLines={1} style={styles.topRatedName}>{name}</Text>
           <View style={styles.topRatedRating}>
             <Ionicons color={colors.gold} name="star" size={12} />
-            <Text style={styles.topRatedRatingText}>{rating}</Text>
+            <Text style={styles.topRatedRatingText}>
+              {rating}
+              {hasRating && reviews > 0 ? ` (${reviews})` : ''}
+            </Text>
           </View>
         </View>
         <View style={styles.topRatedMeta}>
           <Ionicons color={colors.text} name="location-outline" size={14} />
-          <Text style={styles.topRatedMetaText}>{location}</Text>
+          <Text numberOfLines={1} style={styles.topRatedMetaText}>{location}</Text>
         </View>
-        <View style={styles.topRatedChips}>
-          {chips.map((chip, index) => (
-            <View key={chip} style={styles.topRatedChip}>
-              <Text style={[styles.topRatedChipText, index === 0 && styles.topRatedChipUnisex]}>
-                {chip}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {chips.length ? (
+          <View style={styles.topRatedChips}>
+            {chips.map((chip, index) => (
+              <View key={chip} style={styles.topRatedChip}>
+                <Text style={[styles.topRatedChipText, index === 0 && styles.topRatedChipUnisex]}>
+                  {chip}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -498,18 +768,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  homeTitle: {
-    color: colors.heading,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 20,
-    letterSpacing: -0.2,
+  locationLabel: {
+    color: colors.muted2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.8,
   },
   addressText: {
-    color: colors.text,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    letterSpacing: -0.45,
-    lineHeight: 15,
+    color: colors.heading,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 16,
+    letterSpacing: -0.2,
+    marginTop: 2,
   },
   headerActions: {
     alignItems: 'center',
@@ -696,6 +966,29 @@ const styles = StyleSheet.create({
   nearYouRow: {
     gap: 16,
     paddingRight: 8,
+  },
+  nearYouStateBox: {
+    alignItems: 'center',
+    backgroundColor: colors.cardCream,
+    borderColor: colors.apptBorder,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  nearYouStateText: {
+    color: colors.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  nearYouStateAction: {
+    color: colors.gold,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
   nearYouCard: {
     gap: 12,

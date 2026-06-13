@@ -20,7 +20,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
-import { useVerifyPhoneOtp, useVerifySignupPhoneOtp, useSignup } from '@/services/api/hooks/useAuthAPI';
+import {
+  useVerifyPhoneOtp,
+  useVerifySignupPhoneOtp,
+  useSendPhoneOtp,
+  useSendSignupPhoneOtp,
+} from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -58,18 +63,23 @@ export function OtpVerifyScreen() {
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const { phone, countryCode, verificationId, isSignup, signupData } = route.params;
+  const { phone, countryCode, verificationId, mode, customerName } = route.params;
+  const isSignup = mode === 'signup';
 
   const [code, setCode] = useState('');
   const [focused, setFocused] = useState(false);
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  // Kept in state so a resend can swap in a fresh verification id.
+  const [activeVerificationId, setActiveVerificationId] = useState(verificationId);
   const inputRef = useRef<TextInput>(null);
-  
+
   const { mutate: verifyOtp, isPending: isVerifyPending } = useVerifyPhoneOtp();
   const { mutate: verifySignupOtp, isPending: isVerifySignupPending } = useVerifySignupPhoneOtp();
-  const { mutate: registerUser, isPending: isSignupPending } = useSignup();
+  const { mutate: resendLoginOtp, isPending: isResendLoginPending } = useSendPhoneOtp();
+  const { mutate: resendSignupOtp, isPending: isResendSignupPending } = useSendSignupPhoneOtp();
 
-  const isPending = isVerifyPending || isVerifySignupPending || isSignupPending;
+  const isPending =
+    isVerifyPending || isVerifySignupPending || isResendLoginPending || isResendSignupPending;
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -85,23 +95,16 @@ export function OtpVerifyScreen() {
 
   const handleVerify = () => {
     if (isSignup) {
+      // New number: verify OTP to obtain a verification token, then collect profile details.
       verifySignupOtp(
-        { phone, otp: code, verification_id: verificationId },
+        { phone, otp: code, verification_id: activeVerificationId },
         {
           onSuccess: (verifyData) => {
-            // Once OTP is verified, create the account
-            registerUser(
-              { ...signupData, verification_token: verifyData.verification_token },
-              {
-                onSuccess: () => {
-                  Alert.alert('Success', 'Account created successfully!');
-                  navigation.navigate('SignIn');
-                },
-                onError: (error: any) => {
-                  Alert.alert('Signup Failed', error.message || 'Could not create account.');
-                }
-              }
-            );
+            navigation.navigate('Signup', {
+              phone,
+              countryCode,
+              verificationToken: verifyData.verification_token,
+            });
           },
           onError: (error: any) => {
             Alert.alert('Verification Failed', error.message || 'Invalid or expired OTP. Please try again.');
@@ -110,7 +113,7 @@ export function OtpVerifyScreen() {
       );
     } else {
       verifyOtp(
-        { phone, otp: code, verification_id: verificationId },
+        { phone, otp: code, verification_id: activeVerificationId },
         {
           onSuccess: (data) => {
             signIn(data.user || { role: 'client' }, {
@@ -127,11 +130,23 @@ export function OtpVerifyScreen() {
   };
 
   const handleResend = () => {
-    if (seconds > 0) return;
-    setSeconds(RESEND_SECONDS);
-    setCode('');
-    inputRef.current?.focus();
-    // Wire to POST /auth/login/phone/send-otp later.
+    if (seconds > 0 || isPending) return;
+
+    const resend = isSignup ? resendSignupOtp : resendLoginOtp;
+    resend(
+      { phone, country_code: countryCode },
+      {
+        onSuccess: (data) => {
+          setActiveVerificationId(data.verification_id);
+          setSeconds(RESEND_SECONDS);
+          setCode('');
+          inputRef.current?.focus();
+        },
+        onError: (error: any) => {
+          Alert.alert('Error', error.message || 'Failed to resend OTP');
+        },
+      },
+    );
   };
 
   const focusInput = () => inputRef.current?.focus();
@@ -157,7 +172,9 @@ export function OtpVerifyScreen() {
                 <Ionicons color={colors.ctaStart} name="chatbox-ellipses-outline" size={28} />
               </View>
 
-              <Text style={styles.title}>Verify your number</Text>
+              <Text style={styles.title}>
+                {!isSignup && customerName ? `Welcome back, ${customerName}` : 'Verify your number'}
+              </Text>
               <Text style={styles.subtitle}>
                 Enter the 6-digit code sent to{'\n'}
                 <Text style={styles.phone}>{maskPhone(phone, countryCode)}</Text>
@@ -228,9 +245,9 @@ export function OtpVerifyScreen() {
               </View>
 
               <View style={styles.signupRow}>
-                <Text style={styles.signupText}>Number not registered? </Text>
-                <Pressable onPress={() => navigation.navigate('Signup', { phone, countryCode })}>
-                  <Text style={styles.signupLink}>Create account</Text>
+                <Text style={styles.signupText}>Wrong number? </Text>
+                <Pressable onPress={() => navigation.goBack()}>
+                  <Text style={styles.signupLink}>Change number</Text>
                 </Pressable>
               </View>
             </View>

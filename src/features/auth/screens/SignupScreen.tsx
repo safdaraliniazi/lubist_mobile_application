@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthStackParamList } from '@/navigation/navigation.types';
 import { useAuth } from '@/store/AuthContext';
-import { useSendSignupPhoneOtp } from '@/services/api/hooks/useAuthAPI';
+import { useSignup } from '@/services/api/hooks/useAuthAPI';
 
 const colors = {
   bgTop: '#FFF8F4',
@@ -58,13 +58,10 @@ export function SignupScreen() {
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
-  const countryCode = route.params?.countryCode ?? '91';
+  const { phone, countryCode, verificationToken } = route.params;
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [phone, setPhone] = useState(route.params?.phone ?? '');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState<Gender | null>(null);
 
@@ -72,39 +69,42 @@ export function SignupScreen() {
   const isValid =
     fullName.trim().length >= 2 &&
     /^\S+@\S+\.\S+$/.test(email) &&
-    password.length >= 8 &&
-    phone.length >= 10 &&
     ageNum >= 13 &&
     ageNum <= 120 &&
     gender !== null;
 
-  const { mutate: sendOtp, isPending } = useSendSignupPhoneOtp();
+  const { mutate: registerUser, isPending } = useSignup();
 
   const handleSignup = () => {
-    sendOtp(
-      { phone, country_code: countryCode },
+    registerUser(
       {
-        onSuccess: (data) => {
-          navigation.navigate('OtpVerify', {
-            phone,
-            countryCode,
-            verificationId: data.verification_id,
-            isSignup: true,
-            signupData: {
-              email,
-              password,
-              full_name: fullName,
-              phone: `+${countryCode}${phone}`,
-              age: ageNum,
-              gender,
-              user_role: 'customer'
-            }
-          });
+        email: email.trim(),
+        // Phone-first users never choose a password; generate a strong throwaway (mirrors web).
+        password: `PhoneUser!${Math.random().toString(36).slice(2, 12)}`,
+        full_name: fullName.trim(),
+        phone: `+${countryCode}${phone}`,
+        age: ageNum,
+        gender: gender ?? undefined,
+        user_role: 'customer',
+        verification_token: verificationToken,
+      },
+      {
+        onSuccess: (response: any) => {
+          if (response?.access_token && response?.refresh_token) {
+            signIn(response.user || { email, full_name: fullName, role: 'customer' }, {
+              access_token: response.access_token,
+              refresh_token: response.refresh_token,
+            });
+          } else {
+            Alert.alert('Account created', 'Your account is ready. Please sign in.', [
+              { text: 'OK', onPress: () => navigation.navigate('SignIn') },
+            ]);
+          }
         },
         onError: (error: any) => {
-          Alert.alert('Error', error.message || 'Failed to send OTP for signup');
-        }
-      }
+          Alert.alert('Signup Failed', error.message || 'Could not create account.');
+        },
+      },
     );
   };
 
@@ -159,41 +159,12 @@ export function SignupScreen() {
                 </View>
               </Field>
 
-              <Field label="Password">
-                <View style={styles.inputWrap}>
-                  <Ionicons color={colors.muted} name="lock-closed-outline" size={18} />
-                  <TextInput
-                    autoCapitalize="none"
-                    onChangeText={setPassword}
-                    placeholder="At least 8 characters"
-                    placeholderTextColor={colors.placeholder}
-                    secureTextEntry={!showPassword}
-                    style={styles.input}
-                    value={password}
-                  />
-                  <Pressable onPress={() => setShowPassword((s) => !s)}>
-                    <Ionicons
-                      color={colors.muted}
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                    />
-                  </Pressable>
-                </View>
-              </Field>
-
               <Field label="Phone Number">
-                <View style={styles.inputWrap}>
+                <View style={[styles.inputWrap, styles.inputDisabled]}>
                   <Text style={styles.countryCode}>+{countryCode}</Text>
                   <View style={styles.codeDivider} />
-                  <TextInput
-                    keyboardType="number-pad"
-                    maxLength={10}
-                    onChangeText={(v) => setPhone(v.replace(/[^\d]/g, ''))}
-                    placeholder="Enter mobile number"
-                    placeholderTextColor={colors.placeholder}
-                    style={styles.input}
-                    value={phone}
-                  />
+                  <Text style={styles.verifiedPhone}>{phone}</Text>
+                  <Ionicons color={colors.chipActive} name="checkmark-circle" size={18} />
                 </View>
               </Field>
 
@@ -246,7 +217,7 @@ export function SignupScreen() {
                   start={{ x: 0, y: 0 }}
                   style={styles.cta}
                 >
-                  <Text style={styles.ctaText}>{isPending ? 'SENDING OTP...' : 'CREATE ACCOUNT'}</Text>
+                  <Text style={styles.ctaText}>{isPending ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}</Text>
                 </LinearGradient>
               </Pressable>
 
@@ -350,6 +321,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
     height: '100%',
+  },
+  inputDisabled: {
+    opacity: 0.8,
+  },
+  verifiedPhone: {
+    color: colors.heading,
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
   },
   countryCode: {
     color: colors.text,

@@ -9,6 +9,8 @@ import { BookingConfirmedScreen } from '@/features/client/screens/BookingConfirm
 import { ProductCatalogScreen } from '@/features/client/screens/ProductCatalogScreen';
 import { ProductDetailScreen } from '@/features/client/screens/ProductDetailScreen';
 import { CartScreen } from '@/features/client/screens/CartScreen';
+import { ProfileScreen } from '@/features/client/screens/ProfileScreen';
+import { MyReviewsScreen } from '@/features/client/screens/MyReviewsScreen';
 
 import { ClientStackParamList } from './navigation.types';
 
@@ -18,6 +20,7 @@ export function ClientStackNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={ClientNavigator} name="Tabs" />
+      <Stack.Screen component={ProfileScreen} name="Profile" />
       <Stack.Screen component={SalonDetailsScreen} name="SalonDetails" />
       <Stack.Screen component={SalonServicesScreen} name="SalonServices" />
       <Stack.Screen component={SelectTimeScreen} name="SelectTime" />
@@ -26,6 +29,7 @@ export function ClientStackNavigator() {
       <Stack.Screen component={ProductCatalogScreen} name="ProductCatalog" />
       <Stack.Screen component={ProductDetailScreen} name="ProductDetail" />
       <Stack.Screen component={CartScreen} name="Cart" />
+      <Stack.Screen component={MyReviewsScreen} name="MyReviews" />
     </Stack.Navigator>
   );
 }

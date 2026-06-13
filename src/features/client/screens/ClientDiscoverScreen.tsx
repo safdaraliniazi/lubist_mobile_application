@@ -3,20 +3,35 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auraWellness, luminaStudio } from '@/features/client/data/salons';
 import type {
   ClientStackParamList,
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
+import { usePublicSalons, useSearchSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
+import { resolveImageUrl } from '@/services/api/imageUrl';
+import { displayRating } from '@/services/api/rating';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 
-// Card images shared with the home "Top Rated" section (exported 1:1 from Figma).
+// Local fallbacks when a salon has no logo / cover image (exported 1:1 from Figma).
 const topLumina = require('@/assets/home/top-lumina.png');
 const topAura = require('@/assets/home/top-aura.png');
+const fallbackImages = [topLumina, topAura];
 
 const colors = {
   white: '#FFFFFF',
@@ -28,7 +43,6 @@ const colors = {
   bg: '#FFFAF5',
   searchBorder: '#E7D7C9',
   resultsMuted: '#6B7280',
-  mapBg: '#FFE9D6',
   sectionHeading: '#655D52',
   cardBg: '#FFF1E6',
   cardBorder: 'rgba(231, 215, 201, 0.5)',
@@ -61,11 +75,43 @@ const sortOptions = [
 
 type DiscoverNavigation = BottomTabNavigationProp<ClientTabParamList>;
 
+function salonLocation(s: Salon) {
+  const parts = [s.city, s.state].filter(Boolean).join(', ');
+  if (s.distance_km != null) {
+    return parts ? `${parts} • ${s.distance_km.toFixed(1)} km` : `${s.distance_km.toFixed(1)} km`;
+  }
+  return parts || s.address || 'Location unavailable';
+}
+
 export function ClientDiscoverScreen() {
   const navigation = useNavigation<DiscoverNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
-  const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
   const [sortOpen, setSortOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query.trim(), 350);
+  const isSearching = debouncedQuery.length >= 2;
+
+  const publicSalons = usePublicSalons({ enabled: !isSearching });
+  const searchSalons = useSearchSalons({ q: debouncedQuery, enabled: isSearching });
+
+  const active = isSearching ? searchSalons : publicSalons;
+  const salons = active.data?.salons ?? [];
+
+  const openSalon = (s: Salon) => {
+    const route: SalonRouteData = {
+      id: s.id,
+      name: s.business_name,
+      location: salonLocation(s),
+      rating: displayRating(s.average_rating, s.total_reviews).label,
+      reviewCount: s.total_reviews ?? 0,
+      heroImage: s.logo_url ?? s.cover_images?.[0] ?? undefined,
+    };
+    parent?.navigate('SalonDetails', { salon: route });
+  };
+
+  const resultsLabel = active.isLoading
+    ? 'Finding salons…'
+    : `${salons.length} salon${salons.length === 1 ? '' : 's'} found`;
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -73,40 +119,53 @@ export function ClientDiscoverScreen() {
         onBack={() => navigation.navigate('Home')}
         onCart={() => navigation.navigate('Shopping')}
       />
-      <SearchSection onSort={() => setSortOpen(true)} />
+      <SearchSection onSort={() => setSortOpen(true)} value={query} onChangeText={setQuery} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsText}>4 salons found</Text>
-          <Pressable style={styles.mapButton}>
-            <Ionicons color={colors.orange} name="navigate-outline" size={13} />
-            <Text style={styles.mapButtonText}>Map View</Text>
-          </Pressable>
+          <Text style={styles.resultsText}>{resultsLabel}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SALONS NEAR YOU</Text>
-          <View style={styles.list}>
-            <SalonCard
-              chips={['UNISEX', 'HAIR & SPA']}
-              image={topLumina}
-              location="Downtown Ave • 1.2 km"
-              name="Lumina Studio"
-              offer="40% OFF"
-              onPress={() => openSalon(luminaStudio)}
-              rating="5.0"
-            />
-            <SalonCard
-              chips={['UNISEX', 'MASSAGE']}
-              giftStrip
-              image={topAura}
-              location="Westside District • 2.5 km"
-              name="Aura Wellness"
-              offer="GIFT CARD DEAL"
-              onPress={() => openSalon(auraWellness)}
-              rating="4.9"
-            />
-          </View>
+          <Text style={styles.sectionTitle}>{isSearching ? 'SEARCH RESULTS' : 'ALL SALONS'}</Text>
+
+          {active.isLoading ? (
+            <View style={styles.stateBox}>
+              <ActivityIndicator color={colors.gold} size="large" />
+            </View>
+          ) : active.isError ? (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>Couldn't load salons.</Text>
+              <Pressable onPress={() => active.refetch()} style={styles.retryBtn}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : salons.length === 0 ? (
+            <View style={styles.stateBox}>
+              <Ionicons color={colors.sectionHeading} name="search-outline" size={26} />
+              <Text style={styles.stateText}>
+                {isSearching ? `No salons match "${debouncedQuery}".` : 'No salons available yet.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {salons.map((salon, index) => {
+                const remote = resolveImageUrl(salon.logo_url ?? salon.cover_images?.[0]);
+                return (
+                  <SalonCard
+                    key={salon.id}
+                    chips={(salon.salon_type ? [salon.salon_type.replace(/_/g, ' ').toUpperCase()] : [])}
+                    imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
+                    location={salonLocation(salon)}
+                    name={salon.business_name}
+                    offer={salon.has_discount ? 'OFFER' : undefined}
+                    onPress={() => openSalon(salon)}
+                    rating={displayRating(salon.average_rating, salon.total_reviews).label}
+                  />
+                );
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -181,7 +240,7 @@ function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void
         <Pressable onPress={onBack}>
           <Ionicons color={colors.heading} name="arrow-back" size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>Services</Text>
+        <Text style={styles.headerTitle}>Salons</Text>
       </View>
 
       <Pressable onPress={onCart} style={styles.cartWrap}>
@@ -194,16 +253,33 @@ function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void
   );
 }
 
-function SearchSection({ onSort }: { onSort: () => void }) {
+function SearchSection({
+  onSort,
+  value,
+  onChangeText,
+}: {
+  onSort: () => void;
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
   return (
     <View style={styles.searchSection}>
       <View style={styles.searchInputWrap}>
         <Ionicons color={colors.text} name="search-outline" size={18} />
         <TextInput
-          placeholder="Search salons, services..."
+          placeholder="Search salons by name..."
           placeholderTextColor={colors.text}
           style={styles.searchInput}
+          value={value}
+          onChangeText={onChangeText}
+          autoCapitalize="none"
+          returnKeyType="search"
         />
+        {value.length > 0 ? (
+          <Pressable hitSlop={8} onPress={() => onChangeText('')}>
+            <Ionicons color={colors.text} name="close-circle" size={18} />
+          </Pressable>
+        ) : null}
       </View>
       <Pressable onPress={onSort} style={styles.filterButton}>
         <Ionicons color={colors.white} name="options-outline" size={16} />
@@ -214,8 +290,7 @@ function SearchSection({ onSort }: { onSort: () => void }) {
 
 function SalonCard({
   chips,
-  giftStrip = false,
-  image,
+  imageSource,
   location,
   name,
   offer,
@@ -223,34 +298,27 @@ function SalonCard({
   rating,
 }: {
   chips: string[];
-  giftStrip?: boolean;
-  image: number;
+  imageSource: ImageSourcePropType;
   location: string;
   name: string;
-  offer: string;
+  offer?: string;
   onPress: () => void;
   rating: string;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <View style={styles.imageWrap}>
-        <Image source={image} style={styles.cardImage} />
+        <Image source={imageSource} style={styles.cardImage} />
 
-        <View style={[styles.offerStrip, giftStrip && styles.offerStripGift]}>
-          <Text style={[styles.offerStripText, giftStrip && styles.offerStripTextGift]}>
-            {offer}
-          </Text>
-        </View>
+        {offer ? (
+          <View style={styles.offerStrip}>
+            <Text style={styles.offerStripText}>{offer}</Text>
+          </View>
+        ) : null}
 
         <Pressable style={styles.favButton}>
           <Ionicons color={colors.heading} name="heart-outline" size={17} />
         </Pressable>
-
-        <View style={styles.imageDots}>
-          <View style={[styles.imageDot, styles.imageDotActive]} />
-          <View style={styles.imageDot} />
-          <View style={styles.imageDot} />
-        </View>
       </View>
 
       <View style={styles.cardContent}>
@@ -267,13 +335,15 @@ function SalonCard({
           <Text style={styles.locationText}>{location}</Text>
         </View>
 
-        <View style={styles.chipRow}>
-          {chips.map((chip, index) => (
-            <View key={chip} style={styles.chip}>
-              <Text style={[styles.chipText, index === 0 && styles.chipTextUnisex]}>{chip}</Text>
-            </View>
-          ))}
-        </View>
+        {chips.length > 0 ? (
+          <View style={styles.chipRow}>
+            {chips.map((chip) => (
+              <View key={chip} style={styles.chip}>
+                <Text style={styles.chipText}>{chip}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -389,20 +459,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_500Medium',
     fontSize: 14,
   },
-  mapButton: {
-    alignItems: 'center',
-    backgroundColor: colors.mapBg,
-    borderRadius: 9999,
-    flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  mapButtonText: {
-    color: colors.orange,
-    fontFamily: 'Montserrat_600SemiBold',
-    fontSize: 12,
-  },
   section: {
     gap: 16,
     paddingHorizontal: 20,
@@ -416,6 +472,29 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  stateBox: {
+    alignItems: 'center',
+    gap: 12,
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  stateText: {
+    color: colors.resultsMuted,
+    fontFamily: 'Montserrat_500Medium',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: 9999,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: colors.white,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 13,
   },
   card: {
     backgroundColor: colors.cardBg,
