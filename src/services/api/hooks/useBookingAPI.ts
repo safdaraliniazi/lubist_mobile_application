@@ -48,6 +48,26 @@ export interface CheckoutPayload {
   razorpay_signature: string;
   payment_method?: string;
   notes?: string;
+  coupon_code?: string;
+}
+
+export interface CouponBreakdown {
+  subtotal_service_price: number;
+  discount_amount: number;
+  service_total_due: number;
+  convenience_fee_base: number;
+  convenience_fee_discount: number;
+  convenience_fee_due: number;
+  total_amount: number;
+  discount_source?: string | null;
+}
+
+export interface CouponValidationResult {
+  valid: boolean;
+  reason?: string | null;
+  coupon_id?: string | null;
+  coupon_code?: string | null;
+  breakdown?: CouponBreakdown | null;
 }
 
 export interface Booking {
@@ -136,10 +156,22 @@ export function useAvailableSlots(salonId?: string, date?: string, serviceIds?: 
   });
 }
 
+/** Validates / previews a coupon against the current cart ("Apply coupon"). */
+export function useValidateCoupon() {
+  return useMutation({
+    mutationFn: async (code: string) =>
+      await apiPost<CouponValidationResult>('/api/v1/customers/cart/validate-coupon', { code }),
+  });
+}
+
 /** Creates the Razorpay order for the current cart (convenience fee). */
 export function useCreateCartOrder() {
   return useMutation({
-    mutationFn: async () => await apiPost<RazorpayOrder>('/api/v1/payments/cart/create-order', {}),
+    mutationFn: async (couponCode?: string) =>
+      await apiPost<RazorpayOrder>(
+        '/api/v1/payments/cart/create-order',
+        couponCode ? { coupon_code: couponCode } : {},
+      ),
   });
 }
 

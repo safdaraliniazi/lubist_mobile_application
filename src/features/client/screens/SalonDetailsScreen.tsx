@@ -18,6 +18,7 @@ import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { RelatedSalonsSection } from '@/features/client/components/RelatedSalonsSection';
 import { useAuth } from '@/store/AuthContext';
 import {
   useSalonDetail,
@@ -327,6 +328,8 @@ export function SalonDetailsScreen() {
           </View>
 
           <LocationCard name={name} location={locationText} />
+
+          <RelatedSalonsSection salonId={salonId} />
         </ScrollView>
 
         <StickyBookButton onPress={openBooking} />

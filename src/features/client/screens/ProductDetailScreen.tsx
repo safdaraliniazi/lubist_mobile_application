@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { RelatedProductsSection } from '@/features/client/components/RelatedProductsSection';
 import { useAuth } from '@/store/AuthContext';
 import {
   discountLabel,
@@ -314,6 +315,8 @@ export function ProductDetailScreen() {
         <Pressable style={styles.viewAllButton}>
           <Text style={styles.viewAllText}>View All Reviews</Text>
         </Pressable>
+
+        <RelatedProductsSection productId={product.id} />
       </ScrollView>
 
       <View style={styles.ctaShell}>

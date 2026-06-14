@@ -133,6 +133,20 @@ export function useSalonDetail(salonId?: string) {
   });
 }
 
+/**
+ * Salons related to the one being viewed, for the "Related Salons" section at
+ * the bottom of the detail screen. Backend ranks same-city first, then backfills
+ * (see /salons/{id}/related). Returns the same Salon shape as the listings.
+ */
+export function useRelatedSalons(salonId?: string, limit = 10) {
+  return useQuery({
+    queryKey: ['relatedSalons', salonId ?? null, limit],
+    enabled: !!salonId,
+    queryFn: async () =>
+      await apiGet<SalonListResponse>(`/api/v1/salons/${salonId}/related?limit=${limit}`),
+  });
+}
+
 /** A salon's services with full category/subcategory taxonomy attached. */
 export function useSalonServices(salonId?: string) {
   return useQuery({

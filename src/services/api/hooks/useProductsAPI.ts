@@ -156,6 +156,21 @@ export function useProductBySlug(slug?: string) {
   });
 }
 
+/**
+ * Products related to the one being viewed, for the "Related Products" section
+ * at the bottom of the detail screen. Backend ranks same-category first, then
+ * backfills (see /products/{id}/related). Returns the same Product shape as the
+ * catalog, with B2B pricing already applied for B2B roles.
+ */
+export function useRelatedProducts(productId?: string, limit = 10) {
+  return useQuery({
+    queryKey: ['relatedProducts', productId ?? null, limit],
+    enabled: !!productId,
+    queryFn: async () =>
+      await apiGet<ProductListResponse>(`/api/v1/products/${productId}/related?limit=${limit}`),
+  });
+}
+
 // ==========================================
 // PRODUCT CART (mapped from backend customers.py /product-cart/*)
 // All routes require a bearer token; these screens are only reachable when

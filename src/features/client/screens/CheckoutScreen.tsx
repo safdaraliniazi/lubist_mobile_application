@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
@@ -14,7 +14,9 @@ import {
   useUpdateCartItem,
   useRemoveCartItem,
   useClearCart,
+  useValidateCoupon,
   type RazorpayOrder,
+  type CouponValidationResult,
 } from '@/services/api/hooks/useBookingAPI';
 import { RazorpayCheckout, type RazorpaySuccess } from '@/features/client/components/RazorpayCheckout';
 
@@ -58,15 +60,60 @@ export function CheckoutScreen() {
   const { mutate: updateCartItem, isPending: isUpdatingItem } = useUpdateCartItem();
   const { mutate: removeCartItem, isPending: isRemovingItem } = useRemoveCartItem();
   const { mutate: clearCart, isPending: isClearingCart } = useClearCart();
+  const { mutate: validateCoupon, isPending: isValidatingCoupon } = useValidateCoupon();
 
   const [order, setOrder] = useState<RazorpayOrder | null>(null);
   const [payVisible, setPayVisible] = useState(false);
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationResult | null>(null);
+  const [couponMessage, setCouponMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
 
   const items = cart.data?.items ?? [];
   const serviceTotal = cart.data?.total_amount ?? 0;
   const displaySalon = salonName ?? cart.data?.salon_name ?? 'Salon';
   const cartBusy = isUpdatingItem || isRemovingItem || isClearingCart;
   const busy = isCreatingOrder || isCheckingOut;
+
+  // Breakdown is the source of truth when a coupon is applied.
+  const breakdown = appliedCoupon?.valid ? appliedCoupon.breakdown : null;
+  const couponServiceDiscount = breakdown?.discount_amount ?? 0;
+  const couponFeeDiscount = breakdown?.convenience_fee_discount ?? 0;
+  const couponSavings = couponServiceDiscount + couponFeeDiscount;
+  const serviceDue = breakdown?.service_total_due ?? serviceTotal;
+
+  // Clear the applied coupon whenever cart contents change — discount depends on the cart.
+  const cartItemCount = cart.data?.item_count;
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponMessage(null);
+  }, [cartItemCount, serviceTotal]);
+
+  const applyCoupon = () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    validateCoupon(code, {
+      onSuccess: (result) => {
+        if (result.valid) {
+          setAppliedCoupon(result);
+          setCouponMessage(null);
+        } else {
+          setAppliedCoupon(null);
+          const isInfo = /better discount/i.test(result.reason ?? '');
+          setCouponMessage({ type: isInfo ? 'info' : 'error', text: result.reason ?? 'This coupon code is not valid.' });
+        }
+      },
+      onError: (err: any) =>
+        setCouponMessage({ type: 'error', text: err?.message || 'Could not validate coupon. Please try again.' }),
+    });
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponMessage(null);
+  };
 
   const changeQty = (itemId: string, current: number, delta: number) => {
     const next = current + delta;
@@ -98,7 +145,7 @@ export function CheckoutScreen() {
   };
 
   const startPayment = () => {
-    createOrder(undefined, {
+    createOrder(appliedCoupon?.coupon_code ?? undefined, {
       onSuccess: (created) => {
         setOrder(created);
         setPayVisible(true);
@@ -117,6 +164,7 @@ export function CheckoutScreen() {
         razorpay_payment_id: result.razorpay_payment_id,
         razorpay_signature: result.razorpay_signature,
         payment_method: 'razorpay',
+        ...(appliedCoupon?.coupon_code ? { coupon_code: appliedCoupon.coupon_code } : {}),
       },
       {
         onSuccess: (booking) => {
@@ -213,9 +261,77 @@ export function CheckoutScreen() {
             ))}
             <View style={styles.priceDivider} />
             <View style={styles.priceRow}>
-              <Text style={styles.totalLabel}>Service Total</Text>
-              <Text style={styles.totalValue}>{priceText(serviceTotal)}</Text>
+              <Text style={styles.priceLabel}>Service subtotal</Text>
+              <Text style={styles.priceValue}>{priceText(serviceTotal)}</Text>
             </View>
+            {couponServiceDiscount > 0 ? (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Coupon discount</Text>
+                <Text style={styles.discountValue}>-{priceText(couponServiceDiscount)}</Text>
+              </View>
+            ) : null}
+            {couponFeeDiscount > 0 ? (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Fee discount</Text>
+                <Text style={styles.discountValue}>-{priceText(couponFeeDiscount)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.priceDivider} />
+            <View style={styles.priceRow}>
+              <Text style={styles.totalLabel}>Pay at salon</Text>
+              <Text style={styles.totalValue}>{priceText(serviceDue)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Coupon */}
+        <View style={styles.block}>
+          <Text style={styles.sectionTitle}>COUPON</Text>
+          <View style={styles.priceCard}>
+            {appliedCoupon?.valid ? (
+              <View style={styles.couponAppliedRow}>
+                <View style={styles.couponChip}>
+                  <Ionicons color="#166534" name="pricetag" size={13} />
+                  <Text style={styles.couponChipText}>{appliedCoupon.coupon_code}</Text>
+                </View>
+                <Pressable hitSlop={8} onPress={removeCoupon}>
+                  <Text style={styles.couponRemove}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.couponInputRow}>
+                <TextInput
+                  autoCapitalize="characters"
+                  editable={!isValidatingCoupon}
+                  onChangeText={(t) => setCouponInput(t.toUpperCase())}
+                  placeholder="Have a coupon?"
+                  placeholderTextColor={colors.muted}
+                  style={styles.couponInput}
+                  value={couponInput}
+                />
+                <Pressable
+                  disabled={!couponInput.trim() || isValidatingCoupon}
+                  onPress={applyCoupon}
+                  style={[styles.couponApplyBtn, (!couponInput.trim() || isValidatingCoupon) && styles.couponApplyBtnDisabled]}
+                >
+                  {isValidatingCoupon ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.couponApplyText}>Apply</Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
+            {couponMessage ? (
+              <Text style={[styles.couponMsg, couponMessage.type === 'info' ? styles.couponMsgInfo : styles.couponMsgError]}>
+                {couponMessage.text}
+              </Text>
+            ) : null}
+            {couponSavings > 0 ? (
+              <View style={styles.couponSaveBadge}>
+                <Text style={styles.couponSaveText}>You save {priceText(couponSavings)}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -223,7 +339,7 @@ export function CheckoutScreen() {
           <Ionicons color={colors.gold} name="information-circle-outline" size={18} />
           <Text style={styles.noteText}>
             You pay a small convenience fee + GST online now to confirm the booking. The service
-            amount ({priceText(serviceTotal)}) is paid at the salon after your appointment.
+            amount ({priceText(serviceDue)}) is paid at the salon after your appointment.
           </Text>
         </View>
 
@@ -330,7 +446,59 @@ const styles = StyleSheet.create({
   priceRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   priceLabel: { color: colors.text, flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, paddingRight: 12 },
   priceValue: { color: colors.heading, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  discountValue: { color: '#15803D', fontFamily: 'Inter_500Medium', fontSize: 15 },
   serviceRow: { gap: 8 },
+  couponInputRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  couponInput: {
+    backgroundColor: colors.white,
+    borderColor: colors.divider,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.heading,
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    letterSpacing: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  couponApplyBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.heading,
+    borderRadius: 8,
+    justifyContent: 'center',
+    minWidth: 72,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  couponApplyBtnDisabled: { opacity: 0.5 },
+  couponApplyText: { color: colors.white, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  couponAppliedRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  couponChip: {
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    borderColor: '#BBF7D0',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  couponChipText: { color: '#166534', fontFamily: 'Inter_600SemiBold', fontSize: 13, letterSpacing: 0.5 },
+  couponRemove: { color: colors.muted, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  couponMsg: { fontFamily: 'Inter_500Medium', fontSize: 13, marginTop: 10 },
+  couponMsgError: { color: '#DC2626' },
+  couponMsgInfo: { color: colors.text },
+  couponSaveBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    borderRadius: 999,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  couponSaveText: { color: '#166534', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   serviceInfo: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   serviceControls: { alignItems: 'center', flexDirection: 'row', gap: 12 },
   stepper: {

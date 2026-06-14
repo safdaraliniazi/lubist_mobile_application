@@ -33,18 +33,22 @@
 | Auth | 16 | 12 | 🔴 High |
 | Location | 2 | 2 | 🔴 High |
 | Salons (public) | 10 | 6 | 🔴 High |
-| Customers (cart/fav/reviews) | 22 | 21 | 🔴 High |
+| Customers (cart/fav/reviews) | 23 | 21 | 🔴 High |
 | Products | 8 | 3 | 🔴 High |
 | Product Orders | 4 | 0 | 🔴 High |
 | Payments | 3 | 1 | 🟠 Medium |
-| Vendors | 14 | 0 | 🟠 Medium |
+| Coupons (customer checkout) | 1 | 0 | 🔴 High |
+| Vendors | 18 | 0 | 🟠 Medium (coupon CRUD = web-only) |
 | RM | 10 | 0 | 🟡 Low |
 | Careers | 5 | 0 | 🟡 Low |
 | Upload | 4 | 0 | 🟠 Medium |
-| Admin (all sub-routers) | 41 | 0 | ➖ Web-only |
-| **TOTAL** | **139** | **45** | |
+| Admin (all sub-routers) | 46 | 0 | ➖ Web-only |
+| **TOTAL** | **150** | **45** | |
 
-**Overall: 45 / 139 endpoints integrated (~32%).**
+**Overall: 45 / 150 endpoints integrated (~30%).**
+
+> The new **coupon** endpoints: customer `POST /customers/cart/validate-coupon` (mobile 🔴 High);
+> vendor CRUD `/vendors/coupons` (+4) and admin CRUD `/admin/coupons` (+5) are ➖ web-only.
 
 ---
 
@@ -146,6 +150,7 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 | DELETE | `/customers/cart/{item_id}` | bearer | `useRemoveCartItem` | SalonServices / Checkout | 🟢 |
 | DELETE | `/customers/cart/clear/all` | bearer | `useClearCart` | CheckoutScreen (Clear all) | 🟢 |
 | POST | `/customers/cart/checkout` | bearer | `useCheckoutCart` | CheckoutScreen | 🟢 |
+| POST | `/customers/cart/validate-coupon` | bearer | `useValidateCoupon` (NEW) | CheckoutScreen ("Apply coupon") | ⬜ |
 | GET | `/customers/product-cart` | bearer | `useProductCart` | Cart / ProductDetail / Shopping / Catalog | 🟢 |
 | POST | `/customers/product-cart` | bearer | `useAddToProductCart` | ProductDetail / Shopping / Catalog | 🟢 |
 | PUT | `/customers/product-cart/{item_id}` | bearer | `useUpdateProductCartItem` | CartScreen (qty stepper) | 🟢 |
@@ -167,6 +172,13 @@ File: `backend/app/api/customers.py` — **most important for the client app**
 > the Products rollout: add from ProductDetail/Shopping/Catalog, quantity + remove on CartScreen,
 > live cart-count badges. `clear/all` has a hook (`useClearProductCart`) but no UI button yet (🟡).
 > CartScreen's "Proceed to Checkout" is still a placeholder until **Product Orders** is wired.
+>
+> **Coupons (NEW)** — checkout now supports coupon codes. `POST /customers/cart/validate-coupon`
+> `{code}` previews a coupon against the current cart and returns `{valid, reason, coupon_id,
+> coupon_code, breakdown}`; then pass `coupon_code` into `/payments/cart/create-order` and
+> `/customers/cart/checkout`. Build an "Apply coupon" field on CheckoutScreen. **Full build spec
+> (all three frontends, payloads, reason messages) → [`backend/docs/COUPONS_UI_SPEC.md`](../backend/docs/COUPONS_UI_SPEC.md).**
+> See the **Coupons** section below for the endpoint rows.
 >
 > **Product favorites (NEW)** — `/customers/favorites/products` (GET/POST/DELETE) added so the
 > Saved tab shows saved products alongside saved salons. Hooks live in `useProductsAPI.ts`
@@ -218,6 +230,33 @@ File: `backend/app/api/payments.py`
 > Note: `/payments/booking/*`, `/payments/history`, `/payments/vendor/earnings`, and `/payments/webhook/razorpay`
 > were removed from the backend. The cart checkout payment flow (`/payments/cart/create-order` →
 > `/customers/cart/checkout`) is the canonical booking payment path.
+>
+> ⚠️ **Updated:** `/payments/cart/create-order` now accepts an optional body `{ "coupon_code": "SAVE20" }`.
+> When sent, the returned `breakdown` and charged amount reflect the coupon's convenience-fee
+> discount — open Razorpay with the discounted amount. `useCreateCartOrder` should accept an
+> optional `coupon_code` arg.
+
+---
+
+## 🎟️ Coupons — customer checkout (`/api/v1/customers` + `/api/v1/payments`)
+File: `backend/app/api/customers.py`, `backend/app/api/payments.py` ·
+**Full UI spec:** [`backend/docs/COUPONS_UI_SPEC.md`](../backend/docs/COUPONS_UI_SPEC.md)
+
+| Method | Path | Auth | Hook | Screen | Status |
+|--------|------|------|------|--------|--------|
+| POST | `/customers/cart/validate-coupon` | bearer | `useValidateCoupon` (NEW) | CheckoutScreen ("Apply coupon" field) | ⬜ |
+| POST | `/payments/cart/create-order` | bearer | `useCreateCartOrder` (+`coupon_code`) | CheckoutScreen | 🟢 (needs coupon arg) |
+| POST | `/customers/cart/checkout` | bearer | `useCheckoutCart` (+`coupon_code`) | CheckoutScreen | 🟢 (needs coupon arg) |
+
+**Flow:** user types a code → `validate-coupon` returns `{valid, reason, breakdown}` → show
+applied chip + update price summary (`service_total_due` = pay at salon, `convenience_fee_due` =
+pay now, `total_amount`, "You save ₹X") → pass `coupon_code` into create-order + checkout.
+Re-validate whenever the cart changes. Reason strings are display-ready (see spec §6).
+The booking response gains `discount_amount`, `convenience_fee_discount`, `coupon_id`, `coupon_code`.
+
+> ➖ **Vendor coupon management** (`/vendors/coupons` CRUD) and **admin coupon management**
+> (`/admin/coupons` CRUD) are **web-only** (salon-management-app vendor dashboard + salon-admin-panel).
+> Not needed in the customer mobile app — see the spec for those surfaces.
 
 ---
 
@@ -237,6 +276,10 @@ File: `backend/app/api/vendors.py`
 | DELETE | `/vendors/services/{service_id}` | bearer | — | VendorDashboard | ⬜ |
 | GET | `/vendors/promotions/active` | bearer | — | — | ⬜ |
 | POST | `/vendors/promotions/apply` | bearer | — | — | ⬜ |
+| GET | `/vendors/coupons` | bearer | — | (web vendor dashboard) | ➖ |
+| POST | `/vendors/coupons` | bearer | — | (web vendor dashboard) | ➖ |
+| PATCH | `/vendors/coupons/{coupon_id}` | bearer | — | (web vendor dashboard) | ➖ |
+| DELETE | `/vendors/coupons/{coupon_id}` | bearer | — | (web vendor dashboard) | ➖ |
 | GET | `/vendors/bookings` | bearer | — | VendorBookings | ⬜ |
 | PUT | `/vendors/bookings/{booking_id}/status` | bearer | — | VendorBookings | ⬜ |
 | GET | `/vendors/analytics` | bearer | — | VendorDashboard | ⬜ |
@@ -335,6 +378,11 @@ File: `backend/app/api/admin/` — listed for completeness; primarily consumed b
 | POST | `/admin/config/cleanup/expired-tokens` | config |
 | GET | `/admin/product-orders/` | product_orders |
 | PATCH | `/admin/product-orders/{order_id}/status` | product_orders |
+| GET | `/admin/coupons` | coupons |
+| POST | `/admin/coupons` | coupons |
+| GET | `/admin/coupons/{coupon_id}` | coupons |
+| PATCH | `/admin/coupons/{coupon_id}` | coupons |
+| DELETE | `/admin/coupons/{coupon_id}` | coupons |
 
 </details>
 
@@ -352,7 +400,12 @@ Candidates we flagged for a possible `/api/v2` or backend tweaks to better serve
 
 ---
 
-_Last updated: 2026-06-13 (Product favorites: new backend `/customers/favorites/products`
+_Last updated: 2026-06-13 (Coupons & discounts: NEW customer `POST /customers/cart/validate-coupon`
++ `coupon_code` on `/payments/cart/create-order` & `/customers/cart/checkout` (mobile: add an
+"Apply coupon" field on CheckoutScreen + `useValidateCoupon`); vendor CRUD `/vendors/coupons` and
+admin CRUD `/admin/coupons` are web-only. Full build brief for all three frontends:
+backend/docs/COUPONS_UI_SPEC.md. Totals 139→150.) ·
+Earlier: Product favorites: new backend `/customers/favorites/products`
 GET/POST/DELETE + `product_favorites` table; wired `useFavoriteProducts`/`useAddFavoriteProduct`/
 `useRemoveFavoriteProduct` into ProductDetail (heart toggle) and the Saved tab's Products segment
 (ClientAccountScreen, previously hardcoded). Backend tests added; see backend/docs/PRODUCT_FAVORITES_API.md.
