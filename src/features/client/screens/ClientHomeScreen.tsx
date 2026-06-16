@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -267,13 +267,30 @@ const HERO_WIDTH = Dimensions.get('window').width - 32;
 function HeroCarousel() {
   const { data, isLoading } = useBanners();
   const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const indexRef = useRef(0);
 
   const banners = data?.banners ?? [];
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / HERO_WIDTH);
+    indexRef.current = index;
     if (index !== activeIndex) setActiveIndex(index);
   };
+
+  // Auto-advance every 4s. A manual swipe updates indexRef (via onScroll), so the
+  // next tick continues from wherever the user left off. Re-armed when the banner
+  // count changes; no timer for 0/1 banners.
+  useEffect(() => {
+    if (banners.length <= 1) return undefined;
+    const id = setInterval(() => {
+      const next = (indexRef.current + 1) % banners.length;
+      indexRef.current = next;
+      setActiveIndex(next);
+      scrollRef.current?.scrollTo({ x: next * HERO_WIDTH, animated: true });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [banners.length]);
 
   const openLink = (banner: Banner) => {
     const url = banner.link_url?.trim();
@@ -299,6 +316,7 @@ function HeroCarousel() {
   return (
     <View>
       <ScrollView
+        ref={scrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
