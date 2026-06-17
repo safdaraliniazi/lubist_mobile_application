@@ -192,6 +192,30 @@ export function ClientAppointmentsScreen() {
                     </View>
                   </View>
 
+                  {(() => {
+                    const savings =
+                      Number(booking.discount_amount ?? 0) +
+                      Number(booking.convenience_fee_discount ?? 0);
+                    const hasCoupon = Boolean(booking.coupon_code) && savings > 0;
+                    const payAtSalon = Number(booking.service_price ?? 0);
+                    return (
+                      <View style={styles.payRow}>
+                        <View>
+                          <Text style={styles.payLabel}>Pay at salon</Text>
+                          <Text style={styles.payAmount}>₹{payAtSalon.toFixed(0)}</Text>
+                        </View>
+                        {hasCoupon ? (
+                          <View style={styles.couponChip}>
+                            <Ionicons color={colors.green} name="pricetag" size={12} />
+                            <Text style={styles.couponText}>
+                              {booking.coupon_code} · saved ₹{savings.toFixed(0)}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })()}
+
                   <View style={styles.divider} />
 
                   <View style={styles.actions}>
@@ -282,6 +306,26 @@ const styles = StyleSheet.create({
   statusTextDone: { color: colors.muted },
   statusTextCancelled: { color: colors.red },
   divider: { backgroundColor: colors.border, height: 1, marginVertical: 14 },
+  payRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  payLabel: { color: colors.muted, fontFamily: 'Inter_500Medium', fontSize: 11 },
+  payAmount: { color: colors.heading, fontFamily: 'Montserrat_600SemiBold', fontSize: 16 },
+  couponChip: {
+    alignItems: 'center',
+    backgroundColor: colors.greenBg,
+    borderColor: colors.greenBorder,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  couponText: { color: colors.green, fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   actions: { flexDirection: 'row', gap: 12 },
   actionBtn: { alignItems: 'center', borderRadius: 12, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', paddingVertical: 11 },
   actionOutline: { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },

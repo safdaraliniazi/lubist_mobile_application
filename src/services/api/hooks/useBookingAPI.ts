@@ -79,7 +79,14 @@ export interface Booking {
   services: any[];
   status: string;
   payment_status?: string;
+  service_price?: number;
+  convenience_fee?: number;
   total_amount?: number;
+  // Coupon / discount breakdown (0/null for legacy or no-coupon bookings).
+  subtotal_service_price?: number | null;
+  discount_amount?: number;
+  convenience_fee_discount?: number;
+  coupon_code?: string | null;
   // Flattened by the backend's booking transform.
   salon_name?: string | null;
   salon_city?: string | null;
