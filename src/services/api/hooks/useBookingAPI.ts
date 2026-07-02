@@ -70,6 +70,24 @@ export interface CouponValidationResult {
   breakdown?: CouponBreakdown | null;
 }
 
+/** A customer-discoverable coupon ("available offers"). */
+export interface AvailableCoupon {
+  id: string;
+  code: string;
+  title?: string | null;
+  scope: string;
+  salon_id?: string | null;
+  applies_to: string;
+  discount_type: string;
+  discount_value: number;
+  max_discount_cap?: number | null;
+  min_order_amount?: number | null;
+  first_time_scope?: string | null;
+  valid_until?: string | null;
+  summary: string;
+  subtitle?: string | null;
+}
+
 export interface Booking {
   id: string;
   booking_number: string;
@@ -159,6 +177,20 @@ export function useAvailableSlots(salonId?: string, date?: string, serviceIds?: 
       return await apiGet<AvailableSlotsResponse>(
         `/api/v1/salons/${salonId}/available-slots?${params.toString()}`,
       );
+    },
+  });
+}
+
+/**
+ * Coupons the customer can discover ("available offers"). Always includes
+ * platform coupons; pass a salonId to also include that salon's vendor coupons.
+ */
+export function useAvailableCoupons(salonId?: string) {
+  return useQuery({
+    queryKey: ['availableCoupons', salonId ?? null],
+    queryFn: async () => {
+      const qs = salonId ? `?salon_id=${encodeURIComponent(salonId)}` : '';
+      return await apiGet<AvailableCoupon[]>(`/api/v1/customers/available-coupons${qs}`);
     },
   });
 }

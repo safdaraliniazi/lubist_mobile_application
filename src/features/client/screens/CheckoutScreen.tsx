@@ -15,6 +15,7 @@ import {
   useRemoveCartItem,
   useClearCart,
   useValidateCoupon,
+  useAvailableCoupons,
   type RazorpayOrder,
   type CouponValidationResult,
 } from '@/services/api/hooks/useBookingAPI';
@@ -61,6 +62,7 @@ export function CheckoutScreen() {
   const { mutate: removeCartItem, isPending: isRemovingItem } = useRemoveCartItem();
   const { mutate: clearCart, isPending: isClearingCart } = useClearCart();
   const { mutate: validateCoupon, isPending: isValidatingCoupon } = useValidateCoupon();
+  const { data: availableCoupons } = useAvailableCoupons(salonId ?? cart.data?.salon_id ?? undefined);
 
   const [order, setOrder] = useState<RazorpayOrder | null>(null);
   const [payVisible, setPayVisible] = useState(false);
@@ -90,13 +92,14 @@ export function CheckoutScreen() {
     setCouponMessage(null);
   }, [cartItemCount, serviceTotal]);
 
-  const applyCoupon = () => {
-    const code = couponInput.trim().toUpperCase();
+  const applyCoupon = (codeArg?: string) => {
+    const code = (codeArg ?? couponInput).trim().toUpperCase();
     if (!code) return;
     validateCoupon(code, {
       onSuccess: (result) => {
         if (result.valid) {
           setAppliedCoupon(result);
+          setCouponInput(code);
           setCouponMessage(null);
         } else {
           setAppliedCoupon(null);
@@ -311,7 +314,7 @@ export function CheckoutScreen() {
                 />
                 <Pressable
                   disabled={!couponInput.trim() || isValidatingCoupon}
-                  onPress={applyCoupon}
+                  onPress={() => applyCoupon()}
                   style={[styles.couponApplyBtn, (!couponInput.trim() || isValidatingCoupon) && styles.couponApplyBtnDisabled]}
                 >
                   {isValidatingCoupon ? (
@@ -330,6 +333,34 @@ export function CheckoutScreen() {
             {couponSavings > 0 ? (
               <View style={styles.couponSaveBadge}>
                 <Text style={styles.couponSaveText}>You save {priceText(couponSavings)}</Text>
+              </View>
+            ) : null}
+
+            {!appliedCoupon?.valid && (availableCoupons?.length ?? 0) > 0 ? (
+              <View style={styles.availableList}>
+                <Text style={styles.availableHeading}>AVAILABLE OFFERS</Text>
+                {availableCoupons!.map((coupon) => (
+                  <Pressable
+                    key={coupon.id}
+                    disabled={isValidatingCoupon}
+                    onPress={() => applyCoupon(coupon.code)}
+                    style={styles.availableCard}
+                  >
+                    <View style={styles.availableInfo}>
+                      <View style={styles.availableTitleRow}>
+                        <Ionicons color={colors.gold} name="pricetag" size={13} />
+                        <Text style={styles.availableSummary}>{coupon.summary}</Text>
+                      </View>
+                      {coupon.subtitle ? (
+                        <Text style={styles.availableSubtitle}>{coupon.subtitle}</Text>
+                      ) : null}
+                      <View style={styles.availableCodeChip}>
+                        <Text style={styles.availableCode}>{coupon.code}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.availableApply}>Apply</Text>
+                  </Pressable>
+                ))}
               </View>
             ) : null}
           </View>
@@ -499,6 +530,32 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   couponSaveText: { color: '#166534', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  availableList: { gap: 8, marginTop: 4 },
+  availableHeading: { color: colors.muted, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 1 },
+  availableCard: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.gold,
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  availableInfo: { flex: 1, gap: 4, paddingRight: 12 },
+  availableTitleRow: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  availableSummary: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  availableSubtitle: { color: colors.text, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  availableCodeChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.datePill,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  availableCode: { color: colors.heading, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 1 },
+  availableApply: { color: colors.gold, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   serviceInfo: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   serviceControls: { alignItems: 'center', flexDirection: 'row', gap: 12 },
   stepper: {

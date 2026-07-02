@@ -34,6 +34,7 @@ import {
 } from '@/services/api/hooks/useLocationAPI';
 import { usePublicSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
 import { useBanners, bannerImageUri, type Banner } from '@/services/api/hooks/useBannersAPI';
+import { useAvailableCoupons, type AvailableCoupon } from '@/services/api/hooks/useBookingAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 
@@ -82,11 +83,6 @@ const colors = {
   dotInactive: '#F0E0D1',
 };
 
-const offers = [
-  { id: 'o1', title: 'Flat 10% OFF', subtitle: 'On all services with online payment.' },
-  { id: 'o2', title: 'Flat 10% OFF', subtitle: 'On all services with online payment.' },
-];
-
 const services = [
   { id: 's1', title: 'Salons', subtitle: 'Grooming' },
   { id: 's2', title: 'Dermatologists', subtitle: 'Grooming' },
@@ -115,6 +111,10 @@ export function ClientHomeScreen() {
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
   const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
+
+  // Platform-wide coupons for the "Current Offers" carousel (informational).
+  const { data: availableOffers } = useAvailableCoupons();
+  const offers = availableOffers ?? [];
 
   const { coords, permission, loading: locLoading, refetch: refetchLocation } = useDeviceLocation();
   const { data: geo } = useReverseGeocode(coords?.latitude ?? null, coords?.longitude ?? null);
@@ -183,17 +183,21 @@ export function ClientHomeScreen() {
         <SearchBar />
         <AppointmentsCard />
 
-        <SectionTitle text="CURRENT OFFERS" />
-        <ScrollView
-          contentContainerStyle={styles.offersRow}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {offers.map((offer) => (
-            <OfferCard key={offer.id} subtitle={offer.subtitle} title={offer.title} />
-          ))}
-        </ScrollView>
-        <PaginationDots activeIndex={0} count={3} />
+        {offers.length > 0 ? (
+          <>
+            <SectionTitle text="CURRENT OFFERS" />
+            <ScrollView
+              contentContainerStyle={styles.offersRow}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {offers.map((offer) => (
+                <OfferCard key={offer.id} coupon={offer} />
+              ))}
+            </ScrollView>
+            <PaginationDots activeIndex={0} count={offers.length} />
+          </>
+        ) : null}
 
         <NearYouSection
           salons={nearby.data?.salons ?? []}
@@ -376,7 +380,8 @@ function AppointmentsCard() {
   );
 }
 
-function OfferCard({ subtitle, title }: { subtitle: string; title: string }) {
+function OfferCard({ coupon }: { coupon: AvailableCoupon }) {
+  const subtitle = coupon.subtitle ?? coupon.title ?? 'Apply this code at checkout.';
   return (
     <LinearGradient
       colors={[colors.cardCream, '#FCEBDC']}
@@ -388,9 +393,12 @@ function OfferCard({ subtitle, title }: { subtitle: string; title: string }) {
         <View style={styles.offerIcon}>
           <Ionicons color={colors.gold} name="pricetag" size={14} />
         </View>
-        <Text style={styles.offerTitle}>{title}</Text>
+        <Text style={styles.offerTitle}>{coupon.summary}</Text>
       </View>
       <Text style={styles.offerSubtitle}>{subtitle}</Text>
+      <View style={styles.offerCodeChip}>
+        <Text style={styles.offerCode}>{coupon.code}</Text>
+      </View>
     </LinearGradient>
   );
 }
@@ -953,6 +961,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_300Light',
     fontSize: 10,
     lineHeight: 14.4,
+  },
+  offerCodeChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderColor: colors.offerBorder,
+    borderRadius: 4,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  offerCode: {
+    color: colors.offerDark,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 1,
   },
   dotsRow: {
     alignItems: 'center',
