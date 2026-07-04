@@ -2,6 +2,7 @@ import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useSt
 
 import { AppRole } from '@/navigation/navigation.types';
 import { getUser, setTokens, setUser, clearAuth } from '@/services/storage/tokenStorage';
+import { setOnAuthExpired } from '@/services/api/client';
 
 type AuthContextValue = {
   isAuthenticated: boolean;
@@ -36,6 +37,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     }
     loadAuth();
+  }, []);
+
+  // When the API client can't recover the session (refresh failed/expired), it
+  // clears SecureStore and fires this. Reset in-memory state so isAuthenticated
+  // flips to false and navigation sends the user back to the login screen.
+  useEffect(() => {
+    setOnAuthExpired(() => {
+      setUserState(null);
+      setRole(null);
+    });
+    return () => setOnAuthExpired(null);
   }, []);
 
   const value = useMemo(
