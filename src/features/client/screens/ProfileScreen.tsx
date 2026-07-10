@@ -49,6 +49,14 @@ const GENDERS: { value: Gender; label: string }[] = [
 
 type Navigation = NativeStackNavigationProp<ClientStackParamList, 'Profile'>;
 
+// Informational pages, opened in an in-app WebView against the public web app.
+const INFO_LINKS: { icon: keyof typeof Ionicons.glyphMap; label: string; path: string }[] = [
+  { icon: 'information-circle-outline', label: 'About Us', path: '/about' },
+  { icon: 'shield-checkmark-outline', label: 'Privacy Policy', path: '/privacy-policy' },
+  { icon: 'document-text-outline', label: 'Terms & Conditions', path: '/terms-of-service' },
+  { icon: 'help-circle-outline', label: 'FAQ / Help', path: '/faq' },
+];
+
 function initialsOf(name?: string) {
   if (!name) return '?';
   return name
@@ -323,6 +331,22 @@ export function ProfileScreen() {
                 </View>
                 <Ionicons color={colors.muted} name="chevron-forward" size={18} />
               </Pressable>
+
+              <Text style={styles.sectionLabel}>Other Information</Text>
+              {INFO_LINKS.map((link) => (
+                <Pressable
+                  key={link.path}
+                  onPress={() => navigation.navigate('WebPage', { title: link.label, path: link.path })}
+                  style={styles.linkRow}
+                >
+                  <View style={styles.linkLeft}>
+                    <Ionicons color={colors.gold} name={link.icon} size={18} />
+                    <Text style={styles.linkText}>{link.label}</Text>
+                  </View>
+                  <Ionicons color={colors.muted} name="chevron-forward" size={18} />
+                </Pressable>
+              ))}
+
               <Pressable onPress={handleLogout} style={styles.logoutBtn}>
                 <Ionicons color={colors.text} name="log-out-outline" size={18} />
                 <Text style={styles.logoutText}>Log out</Text>
@@ -513,6 +537,14 @@ const styles = StyleSheet.create({
   saveDisabled: { opacity: 0.55 },
   saveText: { color: colors.white, fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   dangerZone: { gap: 12, marginTop: 32 },
+  sectionLabel: {
+    color: colors.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    letterSpacing: 0.3,
+    marginTop: 12,
+    textTransform: 'uppercase',
+  },
   linkRow: {
     alignItems: 'center',
     backgroundColor: colors.white,

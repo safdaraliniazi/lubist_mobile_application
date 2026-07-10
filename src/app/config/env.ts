@@ -34,7 +34,19 @@ function resolveApiBaseUrl(): string {
   return `http://localhost:${API_PORT}`;
 }
 
+/**
+ * Base URL of the public web app (salon-management-app), used to open
+ * informational pages (About Us, Privacy Policy, Terms, FAQ) in an in-app
+ * WebView. Override with EXPO_PUBLIC_WEB_URL for staging/production.
+ */
+function resolveWebBaseUrl(): string {
+  const override = process.env.EXPO_PUBLIC_WEB_URL;
+  if (override) return override.replace(/\/$/, '');
+  return 'https://www.lubist.com';
+}
+
 export const env = {
   appName: 'Lubist Mobile',
   apiBaseUrl: resolveApiBaseUrl(),
+  webBaseUrl: resolveWebBaseUrl(),
 };

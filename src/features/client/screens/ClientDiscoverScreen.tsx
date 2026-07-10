@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -23,7 +23,13 @@ import type {
   ClientTabParamList,
   SalonRouteData,
 } from '@/navigation/navigation.types';
-import { usePublicSalons, useSearchSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
+import {
+  usePublicSalons,
+  useSearchSalons,
+  businessTypeLabel,
+  type Salon,
+} from '@/services/api/hooks/useSalonsAPI';
+import { useNearbySalons } from '@/services/api/hooks/useLocationAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
@@ -85,17 +91,51 @@ function salonLocation(s: Salon) {
 
 export function ClientDiscoverScreen() {
   const navigation = useNavigation<DiscoverNavigation>();
+  const route = useRoute<RouteProp<ClientTabParamList, 'Discover'>>();
+  const initialQuery = route.params?.initialQuery;
+  // Optional filters passed in from the home screen. `businessType` narrows the
+  // list to one establishment type; `nearby` switches to a location-based list.
+  const businessType = route.params?.businessType;
+  const nearby = route.params?.nearby;
+  const filterTitle = route.params?.title;
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const [sortOpen, setSortOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery ?? '');
+
+  // Seed the search box when the screen is opened with a query from elsewhere
+  // (e.g. the home-screen search bar), including when it's already mounted.
+  useEffect(() => {
+    if (initialQuery != null) setQuery(initialQuery);
+  }, [initialQuery]);
   const debouncedQuery = useDebouncedValue(query.trim(), 350);
   const isSearching = debouncedQuery.length >= 2;
+  const hasFilter = !isSearching && (!!businessType || !!nearby);
 
-  const publicSalons = usePublicSalons({ enabled: !isSearching });
+  // Clear the active home-screen filter and fall back to the full catalogue.
+  const clearFilter = () =>
+    navigation.setParams({ businessType: undefined, nearby: undefined, title: undefined });
+
+  // A text search always wins. Otherwise: nearby mode uses the location endpoint,
+  // and the default is the full public catalogue (optionally filtered by type).
+  const publicSalons = usePublicSalons({ enabled: !isSearching && !nearby });
+  const nearbySalons = useNearbySalons({
+    lat: nearby?.lat ?? null,
+    lon: nearby?.lon ?? null,
+    radius: nearby?.radius ?? 15,
+    limit: 50,
+    enabled: !isSearching && !!nearby,
+  });
   const searchSalons = useSearchSalons({ q: debouncedQuery, enabled: isSearching });
 
-  const active = isSearching ? searchSalons : publicSalons;
-  const salons = active.data?.salons ?? [];
+  const active = isSearching ? searchSalons : nearby ? nearbySalons : publicSalons;
+  let salons = (active.data?.salons ?? []) as Salon[];
+  if (!isSearching && businessType) {
+    salons = salons.filter((s) => s.business_type === businessType);
+  }
+
+  const heading = isSearching
+    ? 'SEARCH RESULTS'
+    : (filterTitle ?? (nearby ? 'Salons Near You' : 'All Salons')).toUpperCase();
 
   const openSalon = (s: Salon) => {
     const route: SalonRouteData = {
@@ -118,16 +158,25 @@ export function ClientDiscoverScreen() {
       <MainHeader
         onBack={() => navigation.navigate('Home')}
         onCart={() => navigation.navigate('Shopping')}
+        title={hasFilter ? (filterTitle ?? businessTypeLabel(businessType)) : 'Salons'}
       />
       <SearchSection onSort={() => setSortOpen(true)} value={query} onChangeText={setQuery} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsText}>{resultsLabel}</Text>
+          {hasFilter ? (
+            <Pressable onPress={clearFilter} style={styles.filterChip}>
+              <Text style={styles.filterChipText}>
+                {filterTitle ?? businessTypeLabel(businessType)}
+              </Text>
+              <Ionicons color={colors.gold} name="close" size={14} />
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{isSearching ? 'SEARCH RESULTS' : 'ALL SALONS'}</Text>
+          <Text style={styles.sectionTitle}>{heading}</Text>
 
           {active.isLoading ? (
             <View style={styles.stateBox}>
@@ -144,7 +193,13 @@ export function ClientDiscoverScreen() {
             <View style={styles.stateBox}>
               <Ionicons color={colors.sectionHeading} name="search-outline" size={26} />
               <Text style={styles.stateText}>
-                {isSearching ? `No salons match "${debouncedQuery}".` : 'No salons available yet.'}
+                {isSearching
+                  ? `No salons match "${debouncedQuery}".`
+                  : nearby
+                    ? 'No salons found near you.'
+                    : businessType
+                      ? `No ${businessTypeLabel(businessType).toLowerCase()} available yet.`
+                      : 'No salons available yet.'}
               </Text>
             </View>
           ) : (
@@ -154,7 +209,7 @@ export function ClientDiscoverScreen() {
                 return (
                   <SalonCard
                     key={salon.id}
-                    chips={(salon.salon_type ? [salon.salon_type.replace(/_/g, ' ').toUpperCase()] : [])}
+                    chips={salon.business_type ? [businessTypeLabel(salon.business_type).toUpperCase()] : []}
                     imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
                     location={salonLocation(salon)}
                     name={salon.business_name}
@@ -233,14 +288,22 @@ function SortSheet({ onClose, visible }: { onClose: () => void; visible: boolean
   );
 }
 
-function MainHeader({ onBack, onCart }: { onBack: () => void; onCart: () => void }) {
+function MainHeader({
+  onBack,
+  onCart,
+  title = 'Salons',
+}: {
+  onBack: () => void;
+  onCart: () => void;
+  title?: string;
+}) {
   return (
     <View style={styles.mainHeader}>
       <View style={styles.mainHeaderLeft}>
         <Pressable onPress={onBack}>
           <Ionicons color={colors.heading} name="arrow-back" size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>Salons</Text>
+        <Text numberOfLines={1} style={styles.headerTitle}>{title}</Text>
       </View>
 
       <Pressable onPress={onCart} style={styles.cartWrap}>
@@ -458,6 +521,22 @@ const styles = StyleSheet.create({
     color: colors.resultsMuted,
     fontFamily: 'Montserrat_500Medium',
     fontSize: 14,
+  },
+  filterChip: {
+    alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderColor: colors.searchBorder,
+    borderRadius: 9999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  filterChipText: {
+    color: colors.text,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
   },
   section: {
     gap: 16,

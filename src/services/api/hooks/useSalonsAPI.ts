@@ -22,8 +22,32 @@ export interface Salon {
   logo_url?: string | null;
   cover_images?: string[] | null;
   salon_type?: string | null;
+  // Kind of establishment, sourced from the vendor's join request:
+  // 'salon' | 'spa' | 'clinic' | 'unisex_salon' | 'barber_shop' | 'beauty_parlor' | …
+  business_type?: string | null;
   has_discount?: boolean | null;
   distance_km?: number | null;
+}
+
+/** Human-readable labels for the backend's `business_type` values. */
+export const BUSINESS_TYPE_LABELS: Record<string, string> = {
+  salon: 'Salons',
+  spa: 'Spa & Wellness',
+  clinic: 'Clinics',
+  unisex_salon: 'Unisex Salons',
+  barber_shop: 'Barber Shops',
+  beauty_parlor: 'Beauty Parlors',
+  retail_shop: 'Retail Shops',
+  wholesale_buyer: 'Wholesale',
+};
+
+/** Display label for a `business_type`, falling back to a title-cased slug. */
+export function businessTypeLabel(type?: string | null): string {
+  if (!type) return 'Salons';
+  return (
+    BUSINESS_TYPE_LABELS[type] ??
+    type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 export interface SalonDetail extends Salon {

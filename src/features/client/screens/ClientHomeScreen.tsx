@@ -32,14 +32,18 @@ import {
   useReverseGeocode,
   type NearbySalon,
 } from '@/services/api/hooks/useLocationAPI';
-import { usePublicSalons, type Salon } from '@/services/api/hooks/useSalonsAPI';
+import {
+  usePublicSalons,
+  businessTypeLabel,
+  type Salon,
+} from '@/services/api/hooks/useSalonsAPI';
 import { useBanners, bannerImageUri, type Banner } from '@/services/api/hooks/useBannersAPI';
 import { useAvailableCoupons, type AvailableCoupon } from '@/services/api/hooks/useBookingAPI';
+import { useGetUserProfile } from '@/services/api/hooks/useAuthAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 
 // Assets exported 1:1 from Figma ("HOmescreen").
-const avatar = require('@/assets/home/avatar.png');
 const hero = require('@/assets/home/hero.png');
 const nearbyLumiere = require('@/assets/home/nearby-lumiere.png');
 const nearbyGlow = require('@/assets/home/nearby-glow.png');
@@ -83,12 +87,9 @@ const colors = {
   dotInactive: '#F0E0D1',
 };
 
-const services = [
-  { id: 's1', title: 'Salons', subtitle: 'Grooming' },
-  { id: 's2', title: 'Dermatologists', subtitle: 'Grooming' },
-  { id: 's3', title: 'Spa & Wellness', subtitle: 'Grooming' },
-  { id: 's4', title: 'Salons', subtitle: 'Grooming' },
-];
+// A distinct establishment type present in the catalogue, built at runtime from
+// the salons returned by the API (see ServicesForYou / serviceCategories).
+type ServiceCategory = { type: string; label: string; count: number };
 
 type Essential = {
   id: string;
@@ -106,11 +107,60 @@ const essentials: Essential[] = [
 
 type HomeNavigation = BottomTabNavigationProp<ClientTabParamList>;
 
+// Initials shown in the header profile avatar, e.g. "Jane Doe" -> "JD".
+function initialsOf(name?: string) {
+  if (!name) return '?';
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export function ClientHomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
   const parent = navigation.getParent<NativeStackNavigationProp<ClientStackParamList>>();
   const openSalon = (salon: SalonRouteData) => parent?.navigate('SalonDetails', { salon });
   const openCatalog = (category: string) => parent?.navigate('ProductCatalog', { category });
+  const openOffers = () => parent?.navigate('Offers');
+  const openDiscover = (initialQuery?: string) =>
+    navigation.navigate('Discover', initialQuery ? { initialQuery } : undefined);
+  const openBusinessType = (type: string, title: string) =>
+    navigation.navigate('Discover', { businessType: type, title });
+
+  const { data: profile } = useGetUserProfile();
+  const initials = initialsOf(profile?.user?.full_name);
+
+  // Resolve a banner's tap target: external URLs open in the browser; recognised
+  // in-app links (offers/salon/product/catalog/discover) navigate within the app.
+  const handleBannerPress = (banner: Banner) => {
+    const raw = banner.link_url?.trim();
+    if (!raw) return;
+    if (/^https?:\/\//i.test(raw)) {
+      Linking.openURL(raw).catch(() => {});
+      return;
+    }
+    const target = parseInAppBannerLink(raw);
+    if (!target) return;
+    switch (target.type) {
+      case 'offers':
+        openOffers();
+        break;
+      case 'salon':
+        openSalon({ id: target.id, name: '', location: '', rating: '' });
+        break;
+      case 'product':
+        parent?.navigate('ProductDetail', { productId: target.id });
+        break;
+      case 'catalog':
+        openCatalog(target.category);
+        break;
+      case 'discover':
+        openDiscover(target.query);
+        break;
+    }
+  };
 
   // Platform-wide coupons for the "Current Offers" carousel (informational).
   const { data: availableOffers } = useAvailableCoupons();
@@ -136,6 +186,22 @@ export function ClientHomeScreen() {
           (b.total_reviews ?? 0) - (a.total_reviews ?? 0),
       )
       .slice(0, 5);
+  }, [publicSalons.data]);
+
+  // "Services for you": the distinct establishment types actually present in the
+  // catalogue (with a count each), so the section reflects real data instead of a
+  // hardcoded list. Ordered by how many salons offer each type.
+  const serviceCategories = useMemo<ServiceCategory[]>(() => {
+    const list = publicSalons.data?.salons ?? [];
+    const counts = new Map<string, number>();
+    for (const salon of list) {
+      const type = salon.business_type;
+      if (!type) continue;
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => ({ type, count, label: businessTypeLabel(type) }));
   }, [publicSalons.data]);
 
   const openTopSalon = (s: Salon) =>
@@ -172,15 +238,17 @@ export function ClientHomeScreen() {
       <Header
         label={locationLabel}
         denied={permission === 'denied'}
+        initials={initials}
         onPressLocation={refetchLocation}
         onPressProfile={() => parent?.navigate('Profile')}
+        onPressOffers={openOffers}
       />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <HeroCarousel />
-        <SearchBar />
+        <HeroCarousel onPressBanner={handleBannerPress} />
+        <SearchBar onSubmit={openDiscover} />
         <AppointmentsCard />
 
         {offers.length > 0 ? (
@@ -207,9 +275,20 @@ export function ClientHomeScreen() {
           denied={permission === 'denied'}
           onEnableLocation={refetchLocation}
           onOpen={openNearbySalon}
+          onSeeAll={() =>
+            navigation.navigate(
+              'Discover',
+              coords
+                ? {
+                    nearby: { lat: coords.latitude, lon: coords.longitude, radius: 15 },
+                    title: 'Salons Near You',
+                  }
+                : undefined,
+            )
+          }
         />
 
-        <ServicesForYou />
+        <ServicesForYou categories={serviceCategories} onOpen={openBusinessType} />
 
         <BeautyEssentials onOpen={openCatalog} />
 
@@ -227,13 +306,17 @@ export function ClientHomeScreen() {
 function Header({
   label,
   denied,
+  initials,
   onPressLocation,
   onPressProfile,
+  onPressOffers,
 }: {
   label: string;
   denied: boolean;
+  initials: string;
   onPressLocation: () => void;
   onPressProfile: () => void;
+  onPressOffers: () => void;
 }) {
   return (
     <View style={styles.header}>
@@ -247,12 +330,14 @@ function Header({
       </Pressable>
 
       <View style={styles.headerActions}>
-        <Pressable style={styles.offersButton}>
+        <Pressable style={styles.offersButton} onPress={onPressOffers}>
           <Ionicons color={colors.gold} name="pricetag-outline" size={14} />
           <Text style={styles.offersButtonText}>Offers</Text>
         </Pressable>
         <Pressable hitSlop={8} onPress={onPressProfile}>
-          <Image source={avatar} style={styles.avatar} />
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -266,9 +351,10 @@ const HERO_WIDTH = Dimensions.get('window').width - 32;
 /**
  * Home-screen hero carousel, driven by admin-managed banners (useBanners).
  * Falls back to the bundled hero asset while loading or when no banners exist,
- * so the screen never looks broken. Banners with a `link_url` are tappable.
+ * so the screen never looks broken. Banners with a `link_url` are tappable;
+ * the parent resolves the target (external URL vs in-app deep link).
  */
-function HeroCarousel() {
+function HeroCarousel({ onPressBanner }: { onPressBanner: (banner: Banner) => void }) {
   const { data, isLoading } = useBanners();
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -296,13 +382,6 @@ function HeroCarousel() {
     return () => clearInterval(id);
   }, [banners.length]);
 
-  const openLink = (banner: Banner) => {
-    const url = banner.link_url?.trim();
-    if (url && /^https?:\/\//i.test(url)) {
-      Linking.openURL(url).catch(() => {});
-    }
-  };
-
   // Fallback: bundled hero while loading or when there are no active banners.
   if (isLoading || banners.length === 0) {
     return (
@@ -314,7 +393,7 @@ function HeroCarousel() {
 
   // Single banner: no need for a pager.
   if (banners.length === 1) {
-    return <HeroSlide banner={banners[0]} onPress={openLink} />;
+    return <HeroSlide banner={banners[0]} onPress={onPressBanner} />;
   }
 
   return (
@@ -327,7 +406,7 @@ function HeroCarousel() {
         onMomentumScrollEnd={onScroll}
       >
         {banners.map((banner) => (
-          <HeroSlide key={banner.id} banner={banner} onPress={openLink} />
+          <HeroSlide key={banner.id} banner={banner} onPress={onPressBanner} />
         ))}
       </ScrollView>
       <PaginationDots activeIndex={activeIndex} count={banners.length} />
@@ -353,15 +432,27 @@ function HeroSlide({ banner, onPress }: { banner: Banner; onPress: (b: Banner) =
   );
 }
 
-function SearchBar() {
+function SearchBar({ onSubmit }: { onSubmit: (query?: string) => void }) {
+  const [value, setValue] = useState('');
+  const submit = () => onSubmit(value.trim() || undefined);
   return (
     <View style={styles.searchBar}>
       <Ionicons color={colors.placeholder} name="search-outline" size={20} />
       <TextInput
-        placeholder="Search for a place or service"
+        placeholder="Search salons by name or city"
         placeholderTextColor={colors.placeholder}
         style={styles.searchInput}
+        value={value}
+        onChangeText={setValue}
+        onSubmitEditing={submit}
+        returnKeyType="search"
+        autoCapitalize="none"
       />
+      {value.length > 0 ? (
+        <Pressable hitSlop={8} onPress={submit}>
+          <Ionicons color={colors.gold} name="arrow-forward-circle" size={22} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -411,6 +502,7 @@ function NearYouSection({
   denied,
   onEnableLocation,
   onOpen,
+  onSeeAll,
 }: {
   salons: NearbySalon[];
   loading: boolean;
@@ -419,6 +511,7 @@ function NearYouSection({
   denied: boolean;
   onEnableLocation: () => void;
   onOpen: (salon: NearbySalon) => void;
+  onSeeAll: () => void;
 }) {
   const fallbackImages = [nearbyLumiere, nearbyGlow];
 
@@ -484,7 +577,7 @@ function NearYouSection({
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>NEAR YOU</Text>
-        <Pressable style={styles.seeAll}>
+        <Pressable style={styles.seeAll} onPress={onSeeAll}>
           <Text style={styles.seeAllText}>SEE ALL </Text>
           <Ionicons color={colors.gold} name="chevron-forward" size={12} />
         </Pressable>
@@ -563,7 +656,16 @@ function NearYouCard({
   );
 }
 
-function ServicesForYou() {
+function ServicesForYou({
+  categories,
+  onOpen,
+}: {
+  categories: ServiceCategory[];
+  onOpen: (type: string, title: string) => void;
+}) {
+  // Nothing to show until the catalogue loads (or if no salon has a type set).
+  if (categories.length === 0) return null;
+
   return (
     <View style={styles.section}>
       <View style={styles.dividerHeading}>
@@ -573,14 +675,20 @@ function ServicesForYou() {
       </View>
 
       <View style={styles.servicesGrid}>
-        {services.map((service) => (
-          <View key={service.id} style={styles.serviceCard}>
+        {categories.map((category) => (
+          <Pressable
+            key={category.type}
+            onPress={() => onOpen(category.type, category.label)}
+            style={styles.serviceCard}
+          >
             <View style={styles.serviceText}>
-              <Text style={styles.serviceTitle}>{service.title}</Text>
-              <Text style={styles.serviceSubtitle}>{service.subtitle}</Text>
+              <Text style={styles.serviceTitle}>{category.label}</Text>
+              <Text style={styles.serviceSubtitle}>
+                {category.count} {category.count === 1 ? 'place' : 'places'}
+              </Text>
             </View>
             <Image source={serviceImage} style={styles.serviceThumb} />
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>
@@ -748,6 +856,65 @@ function SectionTitle({ text }: { text: string }) {
   return <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>{text}</Text>;
 }
 
+type BannerTarget =
+  | { type: 'offers' }
+  | { type: 'salon'; id: string }
+  | { type: 'product'; id: string }
+  | { type: 'catalog'; category: string }
+  | { type: 'discover'; query?: string };
+
+/**
+ * Parse a non-http banner `link_url` into an in-app navigation target.
+ *
+ * Admins enter these free-form in the banner form, so we accept a few tolerant
+ * shapes (case-insensitive), with either `:` or `/` separators and an optional
+ * `scheme://` or `host/` prefix:
+ *   offers                        → Offers screen
+ *   salon:<id>   | salons/<id>    → Salon details
+ *   product:<id> | products/<id>  → Product details
+ *   catalog/<category>            → Product catalog for a category
+ *   search/<term> | discover[/<term>] → Discover (optionally pre-filled)
+ * Returns null for anything unrecognised (the tap is then a no-op).
+ */
+function parseInAppBannerLink(raw: string): BannerTarget | null {
+  // Drop a leading scheme (lubist://) and any host so "lubist.app/offers" and
+  // "/offers" and "offers" all normalise to the same path.
+  let path = raw.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  if (path.includes('/') && !path.startsWith('/')) {
+    // Strip a bare host prefix like "lubist.app/offers" but keep "salon/123".
+    const [head, ...rest] = path.split('/');
+    if (head.includes('.')) path = rest.join('/');
+  }
+  path = path.replace(/^\/+/, '').replace(/[?#].*$/, '').trim();
+  if (!path) return null;
+
+  const [rawKey, ...rawParts] = path.split(/[:/]/).filter(Boolean);
+  const key = rawKey.toLowerCase();
+  const arg = rawParts.join('/').trim();
+
+  switch (key) {
+    case 'offers':
+    case 'offer':
+    case 'coupons':
+      return { type: 'offers' };
+    case 'salon':
+    case 'salons':
+      return arg ? { type: 'salon', id: arg } : null;
+    case 'product':
+    case 'products':
+      return arg ? { type: 'product', id: arg } : null;
+    case 'catalog':
+    case 'shop':
+      return arg ? { type: 'catalog', category: arg } : null;
+    case 'search':
+    case 'discover':
+    case 'salons-list':
+      return { type: 'discover', query: arg || undefined };
+    default:
+      return null;
+  }
+}
+
 function PaginationDots({ activeIndex, count }: { activeIndex: number; count: number }) {
   return (
     <View style={styles.dotsRow}>
@@ -829,11 +996,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   avatar: {
+    alignItems: 'center',
+    backgroundColor: colors.gold,
     borderColor: colors.white,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 2,
     height: 40,
+    justifyContent: 'center',
     width: 40,
+  },
+  avatarText: {
+    color: colors.white,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 15,
   },
   heroBanner: {
     borderRadius: 16,

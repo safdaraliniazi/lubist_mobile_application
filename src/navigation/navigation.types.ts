@@ -49,7 +49,19 @@ export type VendorTabParamList = {
 
 export type ClientTabParamList = {
   Home: undefined;
-  Discover: undefined;
+  // Discover can be opened plain (all salons) or pre-filtered from the home screen:
+  //  - initialQuery: seed the search box (e.g. from the home search bar)
+  //  - businessType: restrict the listing to one business_type (e.g. 'spa')
+  //  - nearby: show salons near a coordinate instead of the full catalogue
+  //  - title: heading/label override for the active filter
+  Discover:
+    | {
+        initialQuery?: string;
+        businessType?: string;
+        nearby?: { lat: number; lon: number; radius?: number };
+        title?: string;
+      }
+    | undefined;
   Bookings: undefined;
   Saved: undefined;
   Shopping: undefined;
@@ -91,6 +103,12 @@ export type ClientStackParamList = {
   };
   Cart: undefined;
   MyReviews: undefined;
+  Offers: undefined;
+  WebPage: {
+    title: string;
+    // Path on the web app (e.g. "/privacy-policy") or an absolute URL.
+    path: string;
+  };
 };
 
 export type AdminStackParamList = {
