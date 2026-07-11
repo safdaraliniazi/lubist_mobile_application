@@ -19,32 +19,26 @@ Ask yourself: **did I change any native code?**
 
 ---
 
-## One-time setup (do this ONCE)
+## One-time setup — STATUS: mostly DONE (2026-08-10)
 
-> ⚠️ **Important:** The app you already distributed last week was built *without* update support, so it **cannot** receive OTA updates. That's unavoidable for those existing installs. After you do the setup below and distribute **one more build**, every install from then on receives OTA updates with no reinstall.
+> ⚠️ **Note:** Any app distributed *before* this setup was built without update support and **cannot** receive OTA updates. That's only the earliest installs, and we're not worrying about them. Once you distribute **one more build** (step 4 below), every install from then on receives OTA updates with no reinstall.
 
-```bash
-# 1. Install the updates library
-npx expo install expo-updates
+- [x] **1. Install the updates library** — `npx expo install expo-updates` (added `expo-updates ~29`)
+- [x] **2. Wire up EAS Update** — `eas update:configure` set `updates.url` in app.json, `runtimeVersion` policy `appVersion`, and `channel` on each eas.json profile
+- [ ] **3. Commit the changes**
+  ```bash
+  git add app.json eas.json package.json package-lock.json
+  git commit -m "chore: enable EAS Update (OTA)"
+  ```
+- [ ] **4. Build ONCE more with update support baked in, then redistribute**
+  ```bash
+  npm run build:prod    # = eas build --platform android --profile production
+  ```
+  Hand out the new build link/QR **one last time**. From then on, JS changes go out via `npm run ota` — no more reinstalls.
 
-# 2. Wire up EAS Update (adds `updates.url` + `runtimeVersion` to app.json,
-#    and `channel` to each profile in eas.json)
-eas update:configure
-
-# 3. Commit the generated changes
-git add app.json eas.json package.json package-lock.json
-git commit -m "chore: enable EAS Update (OTA)"
-
-# 4. Build ONCE more with update support baked in, and redistribute
-eas build --platform android --profile production
-# (repeat with --platform ios if/when you ship iOS)
-```
-
-After step 4, hand out the new build link/QR **one last time**. From then on, JS changes go out via `npm run ota` — no more reinstalls.
-
-**After setup, verify these exist:**
-- `app.json` → an `"updates"` block with a `"url"`, and a `"runtimeVersion"` key
-- `eas.json` → each build profile (`preview`, `production`) has a `"channel"` (e.g. `"production"`)
+**Verify (already true after step 2):**
+- `app.json` → `"updates"` block with a `"url"`, and `android.runtimeVersion`
+- `eas.json` → each profile has a `"channel"` (`development` / `preview` / `production`)
 
 ---
 
@@ -76,7 +70,10 @@ Then share the new build link/QR. Users install over the old app (data is preser
 - **EAS Build** = produces the actual installable app file. Needed for native changes and the very first release. Slow (~10-20 min), needs reinstall.
 - **EAS Update (OTA)** = pushes just your JavaScript + assets over the internet to already-installed apps. Fast (~1 min), no reinstall. **Cannot** change native code.
 - **Branch / Channel** = the "lane" an update travels on. Your `production` build listens to the `production` channel/branch. When you run `eas update --branch production`, only production installs get it. (You can have a `preview` lane for testers.)
-- **runtimeVersion** = a compatibility stamp. An OTA update only installs on a build whose `runtimeVersion` matches. When you add a native library or change native config, the runtime version changes, which is Expo's way of saying "this needs a new build, not an OTA." `eas update:configure` sets this up so it's handled for you.
+- **runtimeVersion** = a compatibility stamp. An OTA update only installs on a build whose `runtimeVersion` matches. This project uses the **`appVersion` policy**, which means **`runtimeVersion` = `expo.version` in app.json** (currently `1.0.0`). Practical consequences:
+  - As long as you keep `version` at `1.0.0`, every `npm run ota` reaches all `1.0.0` builds. ✅
+  - The moment you bump `expo.version` (e.g. to `1.0.1`), you have declared a **new runtime** — you MUST make a new build, and OTA updates published under `1.0.0` will NOT reach `1.0.1` installs (and vice-versa).
+  - **So: don't bump `version` for a JS-only OTA change.** Only bump it when you're making a real new build (typically alongside a native change). That keeps OTA flowing to everyone.
 
 ---
 
