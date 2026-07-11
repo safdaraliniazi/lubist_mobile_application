@@ -65,6 +65,14 @@ Then share the new build link/QR. Users install over the old app (data is preser
 
 ---
 
+## APK vs AAB — how we distribute (important)
+
+The `production` profile is set to `distribution: internal` + `android.buildType: apk`, so `npm run build:prod` produces an **installable `.apk`** and a **shareable install page with a QR code**. That's what you send to users for direct install (no Play Store).
+
+- ✅ Share the **install-page URL** EAS prints (e.g. `expo.dev/accounts/.../builds/<id>`), not the raw `.aab`/`.apk` artifact link.
+- ⚠️ An **`.aab` cannot be installed directly** on a phone — it's only for uploading to the Google Play Store. If a build ever outputs `.aab`, the profile is missing `distribution: internal` / `buildType: apk`.
+- 📦 **When you later publish to the Play Store**, create a separate profile (e.g. `production-store`) with `distribution: store` (default, outputs `.aab`) and keep this one for direct installs — or switch this one over at that time.
+
 ## Key concepts (plain English)
 
 - **EAS Build** = produces the actual installable app file. Needed for native changes and the very first release. Slow (~10-20 min), needs reinstall.
