@@ -247,6 +247,72 @@ export function useClearProductCart() {
 }
 
 // ==========================================
+// PRODUCT ORDERS (mapped from backend product_orders.py /product-orders/*)
+// Create builds a Razorpay order from the cart; verify marks it paid. When the
+// backend runs without real Razorpay keys it returns dev_mode=true with a fake
+// order id — the client then calls dev-verify instead of opening the pay sheet.
+// ==========================================
+
+/** Delivery details sent to the backend as `shipping_address` (free-form JSON). */
+export interface ShippingAddress {
+  full_name: string;
+  phone: string;
+  address_line: string;
+  city: string;
+  pincode: string;
+}
+
+export interface CreateProductOrderPayload {
+  shipping_address: ShippingAddress;
+  discount_total?: number;
+  items: { product_id: string; quantity: number }[];
+}
+
+export interface ProductOrderCreateResponse {
+  order: { id: string; order_number: string; total_amount: number; [k: string]: any };
+  razorpay_order_id: string;
+  amount: number; // rupees
+  amount_paise: number; // smallest unit — what the Razorpay checkout expects
+  currency: string;
+  key_id: string;
+  dev_mode: boolean;
+}
+
+/** Create a product order + Razorpay order from the current cart contents. */
+export function useCreateProductOrder() {
+  return useMutation({
+    mutationFn: async (payload: CreateProductOrderPayload) =>
+      await apiPost<ProductOrderCreateResponse>('/api/v1/product-orders/create', {
+        discount_total: 0,
+        ...payload,
+      }),
+  });
+}
+
+/** Verify a Razorpay payment and mark the order paid, then refresh the cart. */
+export function useVerifyProductOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    }) => await apiPost('/api/v1/product-orders/verify', payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PRODUCT_CART_KEY }),
+  });
+}
+
+/** DEV ONLY: mark an order paid without real Razorpay (backend simulation mode). */
+export function useDevVerifyProductOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) =>
+      await apiPost(`/api/v1/product-orders/dev-verify/${orderId}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PRODUCT_CART_KEY }),
+  });
+}
+
+// ==========================================
 // PRODUCT FAVORITES (mapped from backend customers.py /favorites/products)
 // Powers the "Saved" tab's products segment. All routes require a bearer
 // token, so the query is gated by `enabled` on screens reachable while logged

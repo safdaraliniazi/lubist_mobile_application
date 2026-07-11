@@ -31,6 +31,7 @@ import {
   type AvailableCoupon,
 } from '@/services/api/hooks/useSalonsAPI';
 import { useNearbySalons } from '@/services/api/hooks/useLocationAPI';
+import { useProductCart } from '@/services/api/hooks/useProductsAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import { displayRating } from '@/services/api/rating';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
@@ -128,6 +129,10 @@ export function ClientDiscoverScreen() {
   });
   const searchSalons = useSearchSalons({ q: debouncedQuery, enabled: isSearching });
 
+  // The cart icon opens Shopping (the product catalogue), so the badge tracks
+  // the live product-cart count — matching every other product screen.
+  const cartCount = useProductCart().data?.item_count ?? 0;
+
   const active = isSearching ? searchSalons : nearby ? nearbySalons : publicSalons;
   let salons = (active.data?.salons ?? []) as Salon[];
   if (!isSearching && businessType) {
@@ -157,6 +162,7 @@ export function ClientDiscoverScreen() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <MainHeader
+        cartCount={cartCount}
         onBack={() => navigation.navigate('Home')}
         onCart={() => navigation.navigate('Shopping')}
         title={hasFilter ? (filterTitle ?? businessTypeLabel(businessType)) : 'Salons'}
@@ -291,10 +297,12 @@ function SortSheet({ onClose, visible }: { onClose: () => void; visible: boolean
 }
 
 function MainHeader({
+  cartCount,
   onBack,
   onCart,
   title = 'Salons',
 }: {
+  cartCount: number;
   onBack: () => void;
   onCart: () => void;
   title?: string;
@@ -310,9 +318,11 @@ function MainHeader({
 
       <Pressable onPress={onCart} style={styles.cartWrap}>
         <Ionicons color={colors.heading} name="cart-outline" size={24} />
-        <View style={styles.cartBadge}>
-          <Text style={styles.cartBadgeText}>4</Text>
-        </View>
+        {cartCount > 0 ? (
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{cartCount}</Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );

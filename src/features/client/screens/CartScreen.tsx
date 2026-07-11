@@ -4,6 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -16,21 +17,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ClientStackParamList } from '@/navigation/navigation.types';
+import { useAuth } from '@/store/AuthContext';
 import { resolveImageUrl } from '@/services/api/imageUrl';
 import {
   formatPrice,
+  useClearProductCart,
+  useCreateProductOrder,
+  useDevVerifyProductOrder,
   useProductCart,
   useRemoveProductCartItem,
   useUpdateProductCartItem,
+  useVerifyProductOrder,
 } from '@/services/api/hooks/useProductsAPI';
+import type { RazorpayOrder } from '@/services/api/hooks/useBookingAPI';
+import { RazorpayCheckout, type RazorpaySuccess } from '@/features/client/components/RazorpayCheckout';
 
 const productFallback = require('@/assets/product/shampoo-hero.png');
-
-const payments = [
-  { id: 'upi', label: 'UPI (Google Pay/PhonePe)', icon: 'phone-portrait-outline' as const },
-  { id: 'card', label: 'Credit / Debit Card', icon: 'card-outline' as const },
-  { id: 'apple', label: 'Apple Pay', icon: 'logo-apple' as const },
-];
 
 const colors = {
   bg: '#FFF8F4',
@@ -43,30 +45,128 @@ const colors = {
   border: '#D9C3AD',
   lightBorder: '#F0E0D1',
   gold: '#F89E07',
-  upiIcon: '#A66804',
   green: '#2E7D32',
   inputBg: '#FFF8F4',
-  edit: 'rgba(83, 68, 51, 0.7)',
   priceCard: 'rgba(255, 255, 255, 0.7)',
+  error: '#DC2626',
 };
 
 type Navigation = NativeStackNavigationProp<ClientStackParamList>;
 
 export function CartScreen() {
   const navigation = useNavigation<Navigation>();
-  const [payment, setPayment] = useState('upi');
+  const { user } = useAuth();
 
   const cartQuery = useProductCart();
   const updateItem = useUpdateProductCartItem();
   const removeItem = useRemoveProductCartItem();
+  const createOrder = useCreateProductOrder();
+  const verifyOrder = useVerifyProductOrder();
+  const devVerifyOrder = useDevVerifyProductOrder();
+  const clearCart = useClearProductCart();
 
   const items = cartQuery.data?.items ?? [];
   const totalAmount = cartQuery.data?.total_amount ?? 0;
   const itemCount = cartQuery.data?.item_count ?? 0;
 
+  // Delivery details — collected here since there is no saved-address API yet.
+  // Name/phone are prefilled from the signed-in profile where available.
+  const [fullName, setFullName] = useState<string>(user?.full_name ?? '');
+  const [phone, setPhone] = useState<string>(user?.phone ?? '');
+  const [addressLine, setAddressLine] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Razorpay pay-sheet + the order awaiting verification.
+  const [payOrder, setPayOrder] = useState<RazorpayOrder | null>(null);
+  const [payVisible, setPayVisible] = useState(false);
+  const [placedNumber, setPlacedNumber] = useState<string | null>(null);
+
+  const busy =
+    createOrder.isPending || verifyOrder.isPending || devVerifyOrder.isPending;
+
   // Backend clamps to available stock and removes the line at qty 0.
   const changeQty = (itemId: string, current: number, delta: number) =>
     updateItem.mutate({ itemId, quantity: Math.max(1, current + delta) });
+
+  const finishOrder = (orderNumber?: string | null) => {
+    clearCart.mutate();
+    Alert.alert(
+      'Order placed',
+      orderNumber
+        ? `Your order ${orderNumber} has been placed successfully.`
+        : 'Your order has been placed successfully.',
+      [{ text: 'Done', onPress: () => navigation.navigate('Tabs') }],
+    );
+  };
+
+  const handlePaymentSuccess = (result: RazorpaySuccess) => {
+    setPayVisible(false);
+    verifyOrder.mutate(
+      {
+        razorpay_order_id: result.razorpay_order_id,
+        razorpay_payment_id: result.razorpay_payment_id,
+        razorpay_signature: result.razorpay_signature,
+      },
+      {
+        onSuccess: () => finishOrder(placedNumber),
+        onError: (err: any) =>
+          Alert.alert(
+            'Payment not confirmed',
+            err?.message ||
+              'Your payment went through but the order could not be confirmed. Please contact support.',
+          ),
+      },
+    );
+  };
+
+  const proceed = () => {
+    if (items.length === 0) return;
+    const address = {
+      full_name: fullName.trim(),
+      phone: phone.trim(),
+      address_line: addressLine.trim(),
+      city: city.trim(),
+      pincode: pincode.trim(),
+    };
+    if (Object.values(address).some((v) => !v)) {
+      setFormError('Please fill in all delivery details.');
+      return;
+    }
+    setFormError(null);
+
+    createOrder.mutate(
+      {
+        shipping_address: address,
+        items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+      },
+      {
+        onSuccess: (res) => {
+          setPlacedNumber(res.order?.order_number ?? null);
+          if (res.dev_mode) {
+            // Simulation mode: no real Razorpay order, mark it paid directly.
+            devVerifyOrder.mutate(res.order.id, {
+              onSuccess: () => finishOrder(res.order?.order_number),
+              onError: (err: any) =>
+                Alert.alert('Order failed', err?.message || 'Could not complete the order.'),
+            });
+            return;
+          }
+          setPayOrder({
+            order_id: res.razorpay_order_id,
+            amount: res.amount,
+            amount_paise: res.amount_paise,
+            currency: res.currency,
+            key_id: res.key_id,
+          });
+          setPayVisible(true);
+        },
+        onError: (err: any) =>
+          Alert.alert('Checkout failed', err?.message || 'Could not start checkout.'),
+      },
+    );
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -144,70 +244,70 @@ export function CartScreen() {
           </View>
         )}
 
-        <View style={styles.couponCard}>
-          <View style={styles.couponHeader}>
-            <Ionicons color={colors.gold} name="pricetag-outline" size={16} />
-            <Text style={styles.couponTitle}>APPLY COUPON</Text>
-          </View>
-          <View style={styles.couponRow}>
-            <View style={styles.couponInput}>
+        <View style={styles.deliveryCard}>
+          <Text style={styles.sectionLabelDark}>DELIVERY DETAILS</Text>
+
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>Full name</Text>
               <TextInput
-                defaultValue="WELCOME20"
+                onChangeText={setFullName}
+                placeholder="Your name"
                 placeholderTextColor={colors.iconMuted}
-                style={styles.couponInputText}
+                style={styles.input}
+                value={fullName}
               />
             </View>
-            <Pressable style={styles.couponApply}>
-              <Text style={styles.couponApplyText}>Apply</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.deliveryCard}>
-          <View style={styles.deliveryHeader}>
-            <Text style={styles.sectionLabelDark}>DELIVERY TO</Text>
-            <Pressable>
-              <Text style={styles.editText}>Edit</Text>
-            </Pressable>
-          </View>
-          <View style={styles.deliveryBody}>
-            <Ionicons color={colors.iconMuted} name="location-outline" size={18} style={styles.deliveryPin} />
-            <View style={styles.deliveryText}>
-              <Text style={styles.deliveryName}>Home</Text>
-              <Text style={styles.deliveryAddress}>123 Beauty Lane, NY 10001</Text>
-              <View style={styles.deliveryEta}>
-                <Ionicons color={colors.green} name="time-outline" size={13} />
-                <Text style={styles.deliveryEtaText}>Expected by 28 May</Text>
-              </View>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>Phone</Text>
+              <TextInput
+                keyboardType="phone-pad"
+                onChangeText={setPhone}
+                placeholder="Contact number"
+                placeholderTextColor={colors.iconMuted}
+                style={styles.input}
+                value={phone}
+              />
             </View>
           </View>
-        </View>
 
-        <Text style={styles.sectionLabel}>PAYMENT METHOD</Text>
-        <View style={styles.paymentList}>
-          {payments.map((option) => {
-            const isSelected = option.id === payment;
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Address</Text>
+            <TextInput
+              multiline
+              onChangeText={setAddressLine}
+              placeholder="House / flat, street, area"
+              placeholderTextColor={colors.iconMuted}
+              style={[styles.input, styles.inputMultiline]}
+              value={addressLine}
+            />
+          </View>
 
-            return (
-              <Pressable
-                key={option.id}
-                onPress={() => setPayment(option.id)}
-                style={[styles.paymentRow, isSelected && styles.paymentRowSelected]}
-              >
-                <View style={styles.paymentLeft}>
-                  <Ionicons
-                    color={isSelected ? colors.upiIcon : colors.iconMuted}
-                    name={option.icon}
-                    size={18}
-                  />
-                  <Text style={styles.paymentLabel}>{option.label}</Text>
-                </View>
-                <View style={[styles.radio, isSelected && styles.radioSelected]}>
-                  {isSelected ? <View style={styles.radioDot} /> : null}
-                </View>
-              </Pressable>
-            );
-          })}
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>City</Text>
+              <TextInput
+                onChangeText={setCity}
+                placeholder="City"
+                placeholderTextColor={colors.iconMuted}
+                style={styles.input}
+                value={city}
+              />
+            </View>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>Pincode</Text>
+              <TextInput
+                keyboardType="number-pad"
+                onChangeText={setPincode}
+                placeholder="Pincode"
+                placeholderTextColor={colors.iconMuted}
+                style={styles.input}
+                value={pincode}
+              />
+            </View>
+          </View>
+
+          {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         </View>
 
         <View style={styles.priceCard}>
@@ -228,21 +328,49 @@ export function CartScreen() {
             </View>
           </View>
         </View>
+
+        <View style={styles.payNote}>
+          <Ionicons color={colors.heading} name="shield-checkmark-outline" size={18} />
+          <Text style={styles.payNoteText}>Secure payment via Razorpay — UPI, cards & wallets</Text>
+        </View>
       </ScrollView>
 
       <View style={styles.ctaShell}>
-        <Pressable disabled={items.length === 0} onPress={() => navigation.navigate('Tabs')}>
+        <Pressable disabled={items.length === 0 || busy} onPress={proceed}>
           <LinearGradient
             colors={['#D7A797', colors.gold]}
             end={{ x: 0.3, y: 1 }}
             start={{ x: 0, y: 0 }}
-            style={[styles.ctaButton, items.length === 0 && styles.ctaButtonDisabled]}
+            style={[styles.ctaButton, (items.length === 0 || busy) && styles.ctaButtonDisabled]}
           >
-            <Text style={styles.ctaText}>Proceed to Checkout</Text>
-            <Ionicons color={colors.white} name="arrow-forward" size={18} />
+            {busy ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <>
+                <Text style={styles.ctaText}>Proceed to Payment</Text>
+                <Ionicons color={colors.white} name="arrow-forward" size={18} />
+              </>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
+
+      <RazorpayCheckout
+        visible={payVisible}
+        order={payOrder}
+        description="Lubist product order"
+        prefill={{
+          name: fullName || user?.full_name,
+          email: user?.email,
+          contact: phone.replace(/^\+/, ''),
+        }}
+        onSuccess={handlePaymentSuccess}
+        onDismiss={() => setPayVisible(false)}
+        onError={(msg) => {
+          setPayVisible(false);
+          Alert.alert('Payment failed', msg);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -366,22 +494,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_600SemiBold',
     fontSize: 18,
   },
-  itemPriceSub: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  itemOriginal: {
-    color: colors.iconMuted,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    textDecorationLine: 'line-through',
-  },
-  itemDiscount: {
-    color: colors.gold,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-  },
   stepper: {
     alignItems: 'center',
     backgroundColor: colors.inputBg,
@@ -401,156 +513,52 @@ const styles = StyleSheet.create({
     minWidth: 20,
     textAlign: 'center',
   },
-  couponCard: {
-    backgroundColor: colors.white,
-    borderColor: colors.border,
-    borderRadius: 4,
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    gap: 12,
-    padding: 16,
-  },
-  couponHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  couponTitle: {
-    color: colors.heading,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
-  couponRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  couponInput: {
-    backgroundColor: colors.inputBg,
-    borderColor: colors.border,
-    borderRadius: 4,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  couponInputText: {
-    color: colors.heading,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    paddingVertical: 10,
-  },
-  couponApply: {
-    alignItems: 'center',
-    borderColor: colors.gold,
-    borderRadius: 4,
-    borderWidth: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  couponApplyText: {
-    color: colors.gold,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
   deliveryCard: {
     backgroundColor: colors.white,
     borderRadius: 4,
     elevation: 2,
-    gap: 12,
+    gap: 14,
     padding: 16,
     shadowColor: 'rgba(44, 44, 44, 0.06)',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 10,
   },
-  deliveryHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  editText: {
-    color: colors.edit,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  deliveryBody: {
+  fieldRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  deliveryPin: {
-    marginTop: 2,
+  field: {
+    gap: 6,
   },
-  deliveryText: {
+  fieldHalf: {
     flex: 1,
-    gap: 2,
+    gap: 6,
   },
-  deliveryName: {
-    color: colors.heading,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 16,
-  },
-  deliveryAddress: {
+  fieldLabel: {
     color: colors.muted,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-  },
-  deliveryEta: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 4,
-  },
-  deliveryEtaText: {
-    color: colors.green,
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
   },
-  paymentList: {
-    gap: 12,
-    marginTop: -8,
-  },
-  paymentRow: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderColor: colors.lightBorder,
-    borderRadius: 8,
+  input: {
+    backgroundColor: colors.inputBg,
+    borderColor: colors.border,
+    borderRadius: 4,
     borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  paymentRowSelected: {
-    borderColor: colors.gold,
-    borderWidth: 2,
-  },
-  paymentLeft: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  paymentLabel: {
     color: colors.heading,
     fontFamily: 'Inter_400Regular',
-    fontSize: 16,
+    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  radio: {
-    alignItems: 'center',
-    borderColor: colors.border,
-    borderRadius: 10,
-    borderWidth: 2,
-    height: 20,
-    justifyContent: 'center',
-    width: 20,
+  inputMultiline: {
+    minHeight: 64,
+    textAlignVertical: 'top',
   },
-  radioSelected: {
-    borderColor: colors.gold,
-  },
-  radioDot: {
-    backgroundColor: colors.gold,
-    borderRadius: 5,
-    height: 10,
-    width: 10,
+  formError: {
+    color: colors.error,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
   },
   priceCard: {
     backgroundColor: colors.priceCard,
@@ -597,6 +605,22 @@ const styles = StyleSheet.create({
     color: colors.heading,
     fontFamily: 'Montserrat_600SemiBold',
     fontSize: 18,
+  },
+  payNote: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.lightBorder,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+  },
+  payNoteText: {
+    color: colors.muted,
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
   },
   ctaShell: {
     backgroundColor: 'rgba(255, 248, 244, 0.9)',
