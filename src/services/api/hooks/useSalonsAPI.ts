@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../client';
+import type { AvailableCoupon } from './useBookingAPI';
+
+export type { AvailableCoupon };
 
 // ==========================================
 // TYPES (mapped from backend/app/api/salons.py — salons table rows)
@@ -27,6 +30,10 @@ export interface Salon {
   business_type?: string | null;
   has_discount?: boolean | null;
   distance_km?: number | null;
+  // Public coupon/discount display data (attached by the backend salon endpoints)
+  has_discounted_services?: boolean | null;
+  max_discount_percentage?: number | null; // largest service discount %, for "UPTO X% OFF"
+  coupons?: AvailableCoupon[] | null;       // this salon's vendor coupons
 }
 
 /** Human-readable labels for the backend's `business_type` values. */
@@ -54,6 +61,7 @@ export interface SalonDetail extends Salon {
   opening_time?: string | null;
   closing_time?: string | null;
   working_days?: string[] | null;
+  platform_coupons?: AvailableCoupon[] | null; // platform-wide coupons (detail only)
 }
 
 export interface TaxonomyNode {

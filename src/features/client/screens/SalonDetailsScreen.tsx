@@ -25,6 +25,7 @@ import {
   useSalonServices,
   useSalonReviews,
   type SalonReview,
+  type AvailableCoupon,
 } from '@/services/api/hooks/useSalonsAPI';
 import {
   useFavorites,
@@ -204,6 +205,13 @@ export function SalonDetailsScreen() {
   const reviewCount = salon?.total_reviews ?? routeSalon?.reviewCount ?? reviews.length;
   const ratingValue = displayRating(salon?.average_rating, reviewCount).label;
 
+  // Public offers for the "Offers available for you" carousel: this salon's
+  // vendor coupons first, then platform-wide coupons.
+  const offers = useMemo<AvailableCoupon[]>(
+    () => [...(salon?.coupons ?? []), ...(salon?.platform_coupons ?? [])],
+    [salon?.coupons, salon?.platform_coupons],
+  );
+
   const handleCall = () => {
     if (salon?.phone) {
       Linking.openURL(`tel:${salon.phone}`).catch(() => Alert.alert('Error', 'Unable to open the dialer.'));
@@ -274,7 +282,7 @@ export function SalonDetailsScreen() {
 
           <SalonInfo
             name={name}
-            category={humanizeType(salon?.salon_type)}
+            category={humanizeType(salon?.business_type)}
             location={locationText}
             rating={ratingValue}
             reviewCount={reviewCount}
@@ -290,6 +298,7 @@ export function SalonDetailsScreen() {
             workingDays={salon?.working_days}
           />
           <ActionButtons onCall={handleCall} onDirections={handleDirections} />
+          <SalonOffers coupons={offers} />
           <DetailTabs activeTab={activeTab} onTabPress={handleTabPress} />
 
           <View
@@ -485,6 +494,41 @@ function ActionButtons({ onCall, onDirections }: { onCall: () => void; onDirecti
         <Ionicons color={colors.goldDark} name="call-outline" size={18} />
         <Text style={styles.actionButtonText}>Call Salon</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function SalonOffers({ coupons }: { coupons: AvailableCoupon[] }) {
+  if (coupons.length === 0) return null;
+  return (
+    <View style={styles.offersBlock}>
+      <Text style={styles.offersTitle}>Offers available for you</Text>
+      <ScrollView
+        contentContainerStyle={styles.offersRow}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {coupons.map((coupon) => (
+          <View key={coupon.id} style={styles.offerCard}>
+            <View style={styles.offerIconWrap}>
+              <Ionicons color={colors.goldDark} name="pricetag" size={18} />
+            </View>
+            <View style={styles.offerTextWrap}>
+              <Text numberOfLines={2} style={styles.offerSummary}>
+                {coupon.summary}
+              </Text>
+              {coupon.subtitle ? (
+                <Text numberOfLines={1} style={styles.offerSubtitle}>
+                  {coupon.subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.offerCodeChip}>
+              <Text style={styles.offerCodeText}>{coupon.code}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -952,6 +996,68 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     marginLeft: 8,
+  },
+  offersBlock: {
+    marginTop: 18,
+  },
+  offersTitle: {
+    color: colors.text,
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 16,
+    letterSpacing: -0.2,
+    marginBottom: 12,
+    marginHorizontal: 16,
+  },
+  offersRow: {
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  offerCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    maxWidth: 300,
+    padding: 12,
+  },
+  offerIconWrap: {
+    alignItems: 'center',
+    backgroundColor: colors.action,
+    borderRadius: 20,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  offerTextWrap: {
+    flexShrink: 1,
+  },
+  offerSummary: {
+    color: colors.text,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+  },
+  offerSubtitle: {
+    color: colors.subtle,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  offerCodeChip: {
+    backgroundColor: colors.white,
+    borderColor: colors.gold,
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  offerCodeText: {
+    color: colors.goldDark,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   tabsWrap: {
     backgroundColor: colors.surface,

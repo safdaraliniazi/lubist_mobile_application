@@ -28,6 +28,7 @@ import {
   useSearchSalons,
   businessTypeLabel,
   type Salon,
+  type AvailableCoupon,
 } from '@/services/api/hooks/useSalonsAPI';
 import { useNearbySalons } from '@/services/api/hooks/useLocationAPI';
 import { resolveImageUrl } from '@/services/api/imageUrl';
@@ -213,7 +214,8 @@ export function ClientDiscoverScreen() {
                     imageSource={remote ? { uri: remote } : fallbackImages[index % fallbackImages.length]}
                     location={salonLocation(salon)}
                     name={salon.business_name}
-                    offer={salon.has_discount ? 'OFFER' : undefined}
+                    maxDiscount={salon.max_discount_percentage}
+                    coupons={salon.coupons ?? []}
                     onPress={() => openSalon(salon)}
                     rating={displayRating(salon.average_rating, salon.total_reviews).label}
                   />
@@ -351,12 +353,44 @@ function SearchSection({
   );
 }
 
+/**
+ * Rotating strip of a salon's own (vendor) coupons at the bottom of a salon
+ * card. Auto-advances when there is more than one; renders nothing when empty.
+ */
+function SalonCouponStrip({ coupons }: { coupons: AvailableCoupon[] }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (coupons.length <= 1) return undefined;
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % coupons.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [coupons.length]);
+
+  if (coupons.length === 0) return null;
+  const coupon = coupons[index % coupons.length];
+
+  return (
+    <View style={styles.couponStrip}>
+      <Ionicons color={colors.orange} name="pricetag" size={13} />
+      <Text numberOfLines={1} style={styles.couponSummary}>
+        {coupon.summary}
+      </Text>
+      <View style={styles.couponCodeChip}>
+        <Text style={styles.couponCodeText}>{coupon.code}</Text>
+      </View>
+    </View>
+  );
+}
+
 function SalonCard({
   chips,
   imageSource,
   location,
   name,
-  offer,
+  maxDiscount,
+  coupons = [],
   onPress,
   rating,
 }: {
@@ -364,18 +398,20 @@ function SalonCard({
   imageSource: ImageSourcePropType;
   location: string;
   name: string;
-  offer?: string;
+  maxDiscount?: number | null;
+  coupons?: AvailableCoupon[];
   onPress: () => void;
   rating: string;
 }) {
+  const discount = maxDiscount && maxDiscount > 0 ? Math.round(maxDiscount) : 0;
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <View style={styles.imageWrap}>
         <Image source={imageSource} style={styles.cardImage} />
 
-        {offer ? (
+        {discount > 0 ? (
           <View style={styles.offerStrip}>
-            <Text style={styles.offerStripText}>{offer}</Text>
+            <Text style={styles.offerStripText}>UPTO {discount}% OFF</Text>
           </View>
         ) : null}
 
@@ -407,6 +443,8 @@ function SalonCard({
             ))}
           </View>
         ) : null}
+
+        <SalonCouponStrip coupons={coupons} />
       </View>
     </Pressable>
   );
@@ -710,6 +748,38 @@ const styles = StyleSheet.create({
   },
   chipTextUnisex: {
     color: colors.chipUnisex,
+  },
+  couponStrip: {
+    alignItems: 'center',
+    backgroundColor: '#FFF3E8',
+    borderColor: '#F9D9BC',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  couponSummary: {
+    color: colors.heading,
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  couponCodeChip: {
+    backgroundColor: colors.white,
+    borderColor: '#F9D9BC',
+    borderRadius: 4,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  couponCodeText: {
+    color: colors.orange,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9,
+    letterSpacing: 0.5,
   },
   sheetOverlay: {
     backgroundColor: colors.overlay,
