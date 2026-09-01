@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { PaymentLockedNotice } from '@/features/vendor/components/PaymentLockedNotice';
 import { useVendorPaymentGate } from '@/features/vendor/hooks/useVendorPaymentGate';
-import {
-  useUpdateVendorSalon,
-  VendorSalon,
-  VendorSalonUpdate,
-} from '@/services/api/hooks/useVendorAPI';
+import { useUpdateVendorSalon, VendorSalon, VendorSalonUpdate } from '@/services/api/hooks/useVendorAPI';
 import {
   getAgreementDocumentSignedUrl,
   pickDocument,
@@ -17,7 +25,6 @@ import {
 } from '@/services/upload/uploadService';
 import { useAuth } from '@/store/AuthContext';
 import { Screen } from '@/shared/components/Screen';
-import { SurfaceCard } from '@/shared/components/SurfaceCard';
 import { palette } from '@/theme/palette';
 import { typography } from '@/theme/typography';
 
@@ -32,15 +39,15 @@ const DAY_LABELS: Record<(typeof DAYS)[number], string> = {
   sunday: 'Sunday',
 };
 
-const FACILITIES: { key: string; label: string }[] = [
-  { key: 'air_conditioner', label: 'Air Conditioner' },
-  { key: 'car_parking', label: 'Car Parking' },
-  { key: 'free_wifi', label: 'Free Wi-Fi' },
-  { key: 'shower_facility', label: 'Shower Facility' },
-  { key: 'steam_room', label: 'Steam Room' },
-  { key: 'hygienic_environment', label: 'Hygienic Environment' },
-  { key: 'comfortable_seating', label: 'Comfortable Seating' },
-  { key: 'sanitized_tools', label: 'Sanitized Tools' },
+const FACILITIES: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'free_wifi', label: 'Free Wi-Fi', icon: 'wifi-outline' },
+  { key: 'car_parking', label: 'Parking', icon: 'car-outline' },
+  { key: 'air_conditioner', label: 'Air Conditioning', icon: 'snow-outline' },
+  { key: 'shower_facility', label: 'Shower', icon: 'water-outline' },
+  { key: 'steam_room', label: 'Steam', icon: 'cloud-outline' },
+  { key: 'hygienic_environment', label: 'Hygienic', icon: 'shield-checkmark-outline' },
+  { key: 'comfortable_seating', label: 'Seating', icon: 'body-outline' },
+  { key: 'sanitized_tools', label: 'Sanitized Tools', icon: 'construct-outline' },
 ];
 
 function facilityKey(key: string): string {
@@ -209,58 +216,67 @@ export function VendorProfileScreen() {
   }
 
   const galleryImages = (form.cover_images ?? []).slice(1);
+  const coverImage = form.cover_images?.[0];
 
   return (
     <Screen scrollable>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Salon Profile</Text>
-        {isEditing ? (
-          <View style={styles.editActions}>
-            <Pressable onPress={handleCancel}>
-              <Text style={styles.cancelLabel}>Cancel</Text>
-            </Pressable>
-            <Pressable style={styles.saveButton} disabled={updateSalon.isPending} onPress={handleSave}>
-              <Text style={styles.saveButtonLabel}>{updateSalon.isPending ? 'Saving…' : 'Save'}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable onPress={() => setIsEditing(true)}>
-            <Text style={styles.editLabel}>Edit</Text>
-          </Pressable>
-        )}
-      </View>
+      <Text style={styles.title}>Salon Profile</Text>
+      <Text style={styles.subtitle}>Manage your business details and public presence.</Text>
 
-      <SurfaceCard>
+      <View style={[styles.statusCard, !salon.is_active && styles.statusCardInactive]}>
         <View style={styles.statusRow}>
-          <View style={[styles.statusDot, { backgroundColor: salon.is_active ? '#2f7a3e' : '#a3691a' }]} />
-          <Text style={styles.statusText}>
-            {salon.is_active ? 'Active — salon visible & accepting bookings' : 'Inactive — complete payment to activate.'}
-          </Text>
+          <View style={[styles.statusIconWrap, !salon.is_active && styles.statusIconWrapInactive]}>
+            <Ionicons
+              name={salon.is_active ? 'checkmark-circle' : 'alert-circle'}
+              size={20}
+              color={salon.is_active ? '#22c55e' : '#a3691a'}
+            />
+          </View>
+          <View style={styles.statusTextWrap}>
+            <Text style={[styles.statusTitle, !salon.is_active && styles.statusTitleInactive]}>
+              Status: {salon.is_active ? 'Active' : 'Inactive'}
+            </Text>
+            <Text style={[styles.statusBody, !salon.is_active && styles.statusBodyInactive]}>
+              {salon.is_active
+                ? 'Your salon is visible to customers and accepting bookings.'
+                : 'Complete payment to activate your salon and start accepting bookings.'}
+            </Text>
+          </View>
         </View>
         <View style={styles.acceptingRow}>
-          <Text style={styles.line}>Accepting new bookings</Text>
+          <Text style={styles.acceptingLabel}>Accepting new bookings</Text>
           <Switch
             value={salon.accepting_bookings}
             onValueChange={toggleAcceptingBookings}
             trackColor={{ true: palette.primary }}
           />
         </View>
-      </SurfaceCard>
+      </View>
 
-      <SurfaceCard>
+      <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>Basic Information</Text>
-        <Field label="Business Name" value={form.business_name} editable={isEditing} onChangeText={(v) => set('business_name', v)} />
-        <Field label="Email" value={salon.email ?? ''} editable={false} />
-        <Field label="Phone" value={form.phone} editable={isEditing} onChangeText={(v) => set('phone', v)} keyboardType="phone-pad" />
-        <Field label="Address" value={form.address} editable={isEditing} onChangeText={(v) => set('address', v)} />
-        <Field label="City" value={form.city} editable={isEditing} onChangeText={(v) => set('city', v)} />
-        <Field label="State" value={form.state} editable={isEditing} onChangeText={(v) => set('state', v)} />
-        <Field label="Pincode" value={form.pincode} editable={isEditing} onChangeText={(v) => set('pincode', v)} keyboardType="number-pad" />
-        <Field label="Description" value={form.description ?? ''} editable={isEditing} onChangeText={(v) => set('description', v)} multiline />
-      </SurfaceCard>
+        {!isEditing ? (
+          <Pressable style={styles.editRow} onPress={() => setIsEditing(true)}>
+            <Ionicons name="pencil-outline" size={13} color={palette.primary} />
+            <Text style={styles.editLabel}>Edit</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={handleCancel}>
+            <Text style={styles.cancelLabel}>Cancel</Text>
+          </Pressable>
+        )}
+      </View>
+      <View style={styles.card}>
+        <FieldBox label="Business Name" value={form.business_name} editable={isEditing} onChangeText={(v) => set('business_name', v)} />
+        <FieldBox label="Email Address" value={salon.email ?? ''} editable={false} />
+        <FieldBox label="Phone Number" value={form.phone} editable={isEditing} onChangeText={(v) => set('phone', v)} keyboardType="phone-pad" />
+        <FieldBox label="Street Address" value={form.address} editable={isEditing} onChangeText={(v) => set('address', v)} multiline />
+        <FieldBox label="State" value={form.state} editable={isEditing} onChangeText={(v) => set('state', v)} />
+        <FieldBox label="City" value={form.city} editable={isEditing} onChangeText={(v) => set('city', v)} />
+        <FieldBox label="Pincode" value={form.pincode} editable={isEditing} onChangeText={(v) => set('pincode', v)} keyboardType="number-pad" />
+        <FieldBox label="Shop Description" value={form.description ?? ''} editable={isEditing} onChangeText={(v) => set('description', v)} multiline />
 
-      <SurfaceCard>
-        <Text style={styles.sectionTitle}>Business Hours</Text>
+        <Text style={[styles.fieldLabel, styles.spaced]}>Business Hours</Text>
         {DAYS.map((day) => {
           const value = form.business_hours?.[day] ?? 'Closed';
           const isClosed = value === 'Closed';
@@ -272,11 +288,11 @@ export function VendorProfileScreen() {
                   style={styles.dayInput}
                   value={value}
                   placeholder="9:00 AM - 6:00 PM"
-                  placeholderTextColor={palette.muted}
+                  placeholderTextColor="#9a9a9a"
                   onChangeText={(v) => setDayHours(day, v)}
                 />
               ) : (
-                <Text style={isClosed ? styles.lineMuted : styles.line}>{value}</Text>
+                <Text style={isClosed ? styles.dayValueMuted : styles.dayValue}>{value}</Text>
               )}
               {isEditing ? (
                 <Pressable onPress={() => setDayHours(day, isClosed ? '9:00 AM - 6:00 PM' : 'Closed')}>
@@ -286,105 +302,153 @@ export function VendorProfileScreen() {
             </View>
           );
         })}
-      </SurfaceCard>
 
-      <SurfaceCard>
-        <Text style={styles.sectionTitle}>Facilities</Text>
-        <View style={styles.facilitiesGrid}>
-          {FACILITIES.map((facility) => {
-            const checked = !!form.facilities?.[facilityKey(facility.key)];
-            return (
-              <Pressable
-                key={facility.key}
-                style={styles.facilityChip}
-                disabled={!isEditing}
-                onPress={() => setFacility(facility.key, !checked)}
-              >
-                <Text style={[styles.facilityLabel, checked && styles.facilityLabelChecked]}>
-                  {checked ? '☑' : '☐'} {facility.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text style={styles.sectionTitle}>Salon Images</Text>
-        <Text style={styles.subLabel}>Logo</Text>
-        {form.logo_url ? <Text style={styles.lineMuted}>{form.logo_url}</Text> : null}
         {isEditing ? (
-          <Pressable style={styles.uploadButton} disabled={uploading === 'logo'} onPress={handleUploadLogo}>
-            <Text style={styles.uploadButtonLabel}>{uploading === 'logo' ? 'Uploading…' : 'Upload Logo'}</Text>
+          <Pressable style={styles.saveButton} disabled={updateSalon.isPending} onPress={handleSave}>
+            <Ionicons name="checkmark-outline" size={16} color="#fff" />
+            <Text style={styles.saveButtonLabel}>{updateSalon.isPending ? 'Saving…' : 'Save Changes'}</Text>
           </Pressable>
         ) : null}
+      </View>
 
-        <Text style={[styles.subLabel, styles.spaced]}>Cover Image</Text>
-        {form.cover_images?.[0] ? <Text style={styles.lineMuted}>{form.cover_images[0]}</Text> : null}
-        {isEditing ? (
-          <Pressable style={styles.uploadButton} disabled={uploading === 'cover'} onPress={handleUploadCover}>
-            <Text style={styles.uploadButtonLabel}>{uploading === 'cover' ? 'Uploading…' : 'Upload Cover'}</Text>
-          </Pressable>
-        ) : null}
-
-        <Text style={[styles.subLabel, styles.spaced]}>Gallery ({galleryImages.length})</Text>
-        {galleryImages.map((url, idx) => (
-          <View key={url + idx} style={styles.galleryRow}>
-            <Text style={styles.lineMuted} numberOfLines={1}>{url}</Text>
-            {isEditing ? (
-              <Pressable onPress={() => removeGalleryImage(idx)}>
-                <Text style={styles.removeLabel}>Remove</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ))}
-        {isEditing ? (
-          <Pressable style={styles.uploadButton} disabled={uploading === 'gallery'} onPress={handleAddGalleryImage}>
-            <Text style={styles.uploadButtonLabel}>
-              {uploading === 'gallery' ? 'Uploading…' : 'Add Gallery Image'}
-            </Text>
-          </Pressable>
-        ) : null}
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text style={styles.sectionTitle}>Agreement Document</Text>
-        {form.agreement_document_url ? (
-          <>
-            <Text style={styles.line}>Document uploaded</Text>
-            <Pressable onPress={handleViewAgreement}>
-              <Text style={styles.viewLink}>View Document</Text>
+      <Text style={styles.sectionTitle}>Facilities & Amenities</Text>
+      <View style={styles.facilitiesGrid}>
+        {FACILITIES.map((facility) => {
+          const checked = !!form.facilities?.[facilityKey(facility.key)];
+          return (
+            <Pressable
+              key={facility.key}
+              style={[styles.facilityChip, checked && styles.facilityChipActive]}
+              disabled={!isEditing}
+              onPress={() => setFacility(facility.key, !checked)}
+            >
+              <Ionicons name={facility.icon} size={14} color={checked ? '#fff' : '#534433'} />
+              <Text style={[styles.facilityLabel, checked && styles.facilityLabelActive]}>{facility.label}</Text>
             </Pressable>
-            {isEditing ? (
-              <Pressable style={styles.uploadButton} disabled={uploading === 'agreement'} onPress={handleUploadAgreement}>
-                <Text style={styles.uploadButtonLabel}>{uploading === 'agreement' ? 'Uploading…' : 'Replace'}</Text>
-              </Pressable>
-            ) : null}
-          </>
-        ) : isEditing ? (
-          <Pressable style={styles.uploadButton} disabled={uploading === 'agreement'} onPress={handleUploadAgreement}>
-            <Text style={styles.uploadButtonLabel}>{uploading === 'agreement' ? 'Uploading…' : 'Upload Document'}</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.lineMuted}>No document uploaded</Text>
-        )}
-      </SurfaceCard>
+          );
+        })}
+      </View>
 
-      <SurfaceCard>
-        <Text style={styles.sectionTitle}>Quick Stats</Text>
-        <View style={styles.row}>
-          <Text style={styles.lineMuted}>Registration Status</Text>
-          <Text style={styles.line}>{salon.registration_fee_paid ? 'Paid' : 'Pending'}</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Ionicons name="images-outline" size={18} color={palette.text} />
+        <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>Salon Images</Text>
+      </View>
+      <View style={styles.card}>
+        <View style={styles.imagesRow}>
+          <View style={styles.imageColumn}>
+            <Text style={styles.imageLabel}>Cover Image</Text>
+            <View style={styles.coverImageWrap}>
+              {coverImage ? (
+                <Image source={{ uri: coverImage }} style={styles.coverImage} />
+              ) : (
+                <View style={[styles.coverImage, styles.imagePlaceholder]} />
+              )}
+              {isEditing ? (
+                <Pressable
+                  style={styles.imageEditBadge}
+                  disabled={uploading === 'cover'}
+                  onPress={handleUploadCover}
+                >
+                  <Ionicons name="camera-outline" size={13} color={palette.text} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.imageColumn}>
+            <Text style={styles.imageLabel}>Logo</Text>
+            <View style={styles.logoWrap}>
+              {form.logo_url ? (
+                <Image source={{ uri: form.logo_url }} style={styles.logoImage} />
+              ) : (
+                <View style={[styles.logoImage, styles.imagePlaceholder]} />
+              )}
+              {isEditing ? (
+                <Pressable style={styles.imageEditBadge} disabled={uploading === 'logo'} onPress={handleUploadLogo}>
+                  <Ionicons name="camera-outline" size={11} color={palette.text} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
         </View>
-        <View style={styles.row}>
-          <Text style={styles.lineMuted}>Account Status</Text>
-          <Text style={styles.line}>{salon.is_active ? 'Active' : 'Inactive'}</Text>
+
+        <Text style={[styles.imageLabel, styles.spaced]}>Gallery ({galleryImages.length})</Text>
+        <View style={styles.galleryGrid}>
+          {galleryImages.map((url, idx) => (
+            <View key={url + idx} style={styles.galleryItem}>
+              <Image source={{ uri: url }} style={styles.galleryImage} />
+              {isEditing ? (
+                <Pressable style={styles.galleryRemoveBadge} onPress={() => removeGalleryImage(idx)}>
+                  <Ionicons name="close" size={12} color="#fff" />
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+          {isEditing ? (
+            <Pressable
+              style={styles.galleryAddTile}
+              disabled={uploading === 'gallery'}
+              onPress={handleAddGalleryImage}
+            >
+              <Ionicons name="add-outline" size={18} color="#7a7a7a" />
+              <Text style={styles.galleryAddLabel}>
+                {uploading === 'gallery' ? 'Uploading…' : 'Upload'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
-        <View style={styles.row}>
-          <Text style={styles.lineMuted}>Member Since</Text>
-          <Text style={styles.line}>{new Date(salon.created_at).toLocaleDateString()}</Text>
+      </View>
+
+      <Text style={styles.sectionTitle}>Agreement Document</Text>
+      <View style={styles.card}>
+        {form.agreement_document_url ? (
+          <View style={styles.documentUploaded}>
+            <View style={styles.documentIconWrap}>
+              <Ionicons name="document-text-outline" size={16} color="#22c55e" />
+            </View>
+            <Text style={styles.documentUploadedLabel}>Document Uploaded</Text>
+          </View>
+        ) : (
+          <Text style={styles.dayValueMuted}>No document uploaded</Text>
+        )}
+        <View style={styles.documentActions}>
+          {form.agreement_document_url ? (
+            <Pressable style={styles.outlinedButton} onPress={handleViewAgreement}>
+              <Text style={styles.outlinedButtonLabel}>View Document</Text>
+            </Pressable>
+          ) : null}
+          {isEditing ? (
+            <Pressable
+              style={styles.outlinedButton}
+              disabled={uploading === 'agreement'}
+              onPress={handleUploadAgreement}
+            >
+              <Text style={styles.outlinedButtonLabel}>
+                {uploading === 'agreement'
+                  ? 'Uploading…'
+                  : form.agreement_document_url
+                    ? 'Replace Document'
+                    : 'Upload Document'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
-      </SurfaceCard>
+      </View>
+
+      <Text style={styles.sectionTitle}>Quick Stats</Text>
+      <View style={styles.statsCard}>
+        <View style={styles.statsRow}>
+          <Text style={styles.statsLabel}>Registration Status</Text>
+          <Text style={styles.statsValueGreen}>{salon.registration_fee_paid ? 'Paid' : 'Pending'}</Text>
+        </View>
+        <View style={styles.statsRow}>
+          <Text style={styles.statsLabel}>Account Status</Text>
+          <Text style={styles.statsValueGreen}>{salon.is_active ? 'Active' : 'Inactive'}</Text>
+        </View>
+        <View style={[styles.statsRow, styles.statsRowLast]}>
+          <Text style={styles.statsLabel}>Member Since</Text>
+          <Text style={styles.statsValueDark}>{new Date(salon.created_at).toLocaleDateString()}</Text>
+        </View>
+      </View>
 
       <Pressable onPress={signOut} style={styles.signOutButton}>
         <Text style={styles.signOutLabel}>Sign out</Text>
@@ -393,7 +457,7 @@ export function VendorProfileScreen() {
   );
 }
 
-function Field({
+function FieldBox({
   label,
   value,
   editable,
@@ -411,122 +475,174 @@ function Field({
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      {editable ? (
-        <TextInput
-          style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
-          value={value ?? ''}
-          onChangeText={onChangeText}
-          multiline={multiline}
-          keyboardType={keyboardType}
-        />
-      ) : (
-        <Text style={styles.line}>{value || '—'}</Text>
-      )}
+      <View style={[styles.fieldBox, multiline && styles.fieldBoxMultiline]}>
+        {editable ? (
+          <TextInput
+            style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+            value={value ?? ''}
+            onChangeText={onChangeText}
+            multiline={multiline}
+            keyboardType={keyboardType}
+          />
+        ) : (
+          <Text style={styles.fieldValue}>{value || '—'}</Text>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   loader: { marginTop: 40 },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
   title: {
-    color: palette.text,
+    color: '#2c2c2c',
     fontSize: 24,
     fontWeight: typography.weight.bold,
   },
-  editLabel: {
-    color: palette.primary,
-    fontSize: 15,
-    fontWeight: typography.weight.semibold,
-  },
-  editActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 16,
-  },
-  cancelLabel: {
-    color: palette.muted,
-    fontSize: 15,
-  },
-  saveButton: {
-    backgroundColor: palette.primary,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  saveButtonLabel: {
-    color: palette.surface,
+  subtitle: {
+    color: '#7a7a7a',
     fontSize: 14,
-    fontWeight: typography.weight.semibold,
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  statusCard: {
+    backgroundColor: '#dcfce7',
+    borderColor: 'rgba(34,197,94,0.2)',
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 24,
+    padding: 16,
+  },
+  statusCardInactive: {
+    backgroundColor: '#fdf1de',
+    borderColor: 'rgba(163,105,26,0.2)',
   },
   statusRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
-  statusDot: {
-    borderRadius: 6,
-    height: 10,
-    width: 10,
+  statusIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderRadius: 999,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
-  statusText: {
-    color: palette.text,
+  statusIconWrapInactive: {
+    backgroundColor: 'rgba(163,105,26,0.1)',
+  },
+  statusTextWrap: {
     flex: 1,
+  },
+  statusTitle: {
+    color: '#22c55e',
     fontSize: 14,
+    fontWeight: typography.weight.semibold,
+  },
+  statusTitleInactive: {
+    color: '#a3691a',
+  },
+  statusBody: {
+    color: 'rgba(34,197,94,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusBodyInactive: {
+    color: '#a3691a',
   },
   acceptingRow: {
     alignItems: 'center',
-    borderTopColor: palette.border,
+    borderTopColor: 'rgba(0,0,0,0.06)',
     borderTopWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 14,
     paddingTop: 14,
   },
-  sectionTitle: {
+  acceptingLabel: {
     color: palette.text,
-    fontSize: 15,
+    fontSize: 13,
+    fontWeight: typography.weight.medium,
+  },
+  sectionHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    color: '#2c2c2c',
+    fontSize: 20,
     fontWeight: typography.weight.semibold,
     marginBottom: 12,
+    marginTop: 4,
+  },
+  sectionTitleInline: {
+    marginBottom: 0,
+    marginTop: 0,
+  },
+  editRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  editLabel: {
+    color: palette.primary,
+    fontSize: 14,
+  },
+  cancelLabel: {
+    color: '#7a7a7a',
+    fontSize: 14,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 24,
+    padding: 22,
   },
   field: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   fieldLabel: {
-    color: palette.muted,
+    color: '#2c2c2c',
     fontSize: 12,
-    marginBottom: 4,
+    fontWeight: typography.weight.semibold,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  fieldBox: {
+    backgroundColor: 'rgba(243,243,243,0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  fieldBoxMultiline: {
+    minHeight: 60,
+  },
+  fieldValue: {
+    color: '#1a1c1c',
+    fontSize: 14,
   },
   fieldInput: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
-    borderRadius: 10,
-    borderWidth: 1,
-    color: palette.text,
+    color: '#1a1c1c',
     fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    padding: 0,
   },
   fieldInputMultiline: {
-    minHeight: 70,
+    minHeight: 40,
     textAlignVertical: 'top',
   },
-  line: {
-    color: palette.text,
-    fontSize: 14,
-  },
-  lineMuted: {
-    color: palette.muted,
-    fontSize: 13,
+  spaced: {
+    marginTop: 8,
   },
   dayRow: {
     alignItems: 'center',
-    borderTopColor: palette.border,
+    borderTopColor: 'rgba(0,0,0,0.06)',
     borderTopWidth: 1,
     flexDirection: 'row',
     gap: 10,
@@ -534,96 +650,236 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dayLabel: {
-    color: palette.text,
+    color: '#2c2c2c',
     fontSize: 13,
     fontWeight: typography.weight.medium,
     width: 80,
   },
+  dayValue: {
+    color: '#1a1c1c',
+    flex: 1,
+    fontSize: 13,
+  },
+  dayValueMuted: {
+    color: '#9a9a9a',
+    flex: 1,
+    fontSize: 13,
+  },
   dayInput: {
-    borderColor: palette.border,
+    backgroundColor: 'rgba(243,243,243,0.7)',
     borderRadius: 8,
-    borderWidth: 1,
-    color: palette.text,
+    color: '#1a1c1c',
     flex: 1,
     fontSize: 13,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   toggleDayLabel: {
     color: palette.primary,
     fontSize: 12,
     fontWeight: typography.weight.semibold,
   },
+  saveButton: {
+    alignItems: 'center',
+    backgroundColor: palette.primary,
+    borderRadius: 18,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 16,
+  },
+  saveButtonLabel: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: typography.weight.medium,
+  },
   facilitiesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginBottom: 24,
   },
   facilityChip: {
-    borderColor: palette.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  facilityLabel: {
-    color: palette.muted,
-    fontSize: 12,
-  },
-  facilityLabelChecked: {
-    color: palette.text,
-    fontWeight: typography.weight.semibold,
-  },
-  subLabel: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: typography.weight.semibold,
-  },
-  spaced: {
-    marginTop: 14,
-  },
-  uploadButton: {
-    alignSelf: 'flex-start',
-    borderColor: palette.primary,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  uploadButtonLabel: {
-    color: palette.primary,
-    fontSize: 13,
-    fontWeight: typography.weight.semibold,
-  },
-  galleryRow: {
     alignItems: 'center',
+    backgroundColor: '#eae0d3',
+    borderRadius: 16,
     flexDirection: 'row',
     gap: 8,
-    justifyContent: 'space-between',
-    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  removeLabel: {
-    color: '#a83a2f',
-    fontSize: 12,
+  facilityChipActive: {
+    backgroundColor: palette.primary,
   },
-  viewLink: {
-    color: palette.primary,
+  facilityLabel: {
+    color: '#534433',
     fontSize: 13,
-    fontWeight: typography.weight.semibold,
-    marginTop: 4,
   },
-  row: {
+  facilityLabelActive: {
+    color: '#fff',
+    fontWeight: typography.weight.medium,
+  },
+  imagesRow: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  imageColumn: {
+    gap: 12,
+  },
+  imageLabel: {
+    color: '#7a7a7a',
+    fontSize: 13,
+  },
+  coverImageWrap: {
+    position: 'relative',
+    width: 142,
+  },
+  coverImage: {
+    borderRadius: 16,
+    height: 100,
+    width: 142,
+  },
+  logoWrap: {
+    position: 'relative',
+    width: 96,
+  },
+  logoImage: {
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 96,
+    width: 96,
+  },
+  imagePlaceholder: {
+    backgroundColor: '#f3f3f3',
+  },
+  imageEditBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 999,
+    justifyContent: 'center',
+    padding: 6,
+    position: 'absolute',
+    right: 6,
+    top: 6,
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  galleryItem: {
+    position: 'relative',
+  },
+  galleryImage: {
+    borderRadius: 12,
+    height: 72,
+    width: 72,
+  },
+  galleryRemoveBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 999,
+    justifyContent: 'center',
+    padding: 3,
+    position: 'absolute',
+    right: 4,
+    top: 4,
+  },
+  galleryAddTile: {
+    alignItems: 'center',
+    backgroundColor: '#e8e8e8',
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    gap: 6,
+    height: 72,
+    justifyContent: 'center',
+    width: 72,
+  },
+  galleryAddLabel: {
+    color: '#7a7a7a',
+    fontSize: 10,
+  },
+  documentUploaded: {
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+    borderColor: 'rgba(34,197,94,0.2)',
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+    padding: 14,
+  },
+  documentIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderRadius: 999,
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
+  },
+  documentUploadedLabel: {
+    color: '#22c55e',
+    fontSize: 14,
+    fontWeight: typography.weight.medium,
+  },
+  documentActions: {
+    gap: 10,
+  },
+  outlinedButton: {
+    alignItems: 'center',
+    borderColor: palette.primary,
+    borderRadius: 12,
+    borderWidth: 2,
+    paddingVertical: 16,
+  },
+  outlinedButtonLabel: {
+    color: palette.primary,
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
+  },
+  statsCard: {
+    backgroundColor: '#fff6ec',
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 24,
+    padding: 22,
+  },
+  statsRow: {
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+    borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 6,
+    paddingVertical: 10,
+  },
+  statsRowLast: {
+    borderBottomWidth: 0,
+  },
+  statsLabel: {
+    color: '#7a7a7a',
+    fontSize: 13,
+  },
+  statsValueGreen: {
+    color: '#22c55e',
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
+  },
+  statsValueDark: {
+    color: '#2c2c2c',
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
   },
   signOutButton: {
     alignItems: 'center',
     backgroundColor: palette.primary,
     borderRadius: 16,
-    marginTop: 8,
     marginBottom: 24,
+    marginTop: 8,
     paddingVertical: 14,
   },
   signOutLabel: {
