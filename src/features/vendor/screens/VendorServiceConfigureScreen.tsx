@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import {
   ServiceCategoryNode,
@@ -13,7 +25,6 @@ import {
 } from '@/services/api/hooks/useVendorAPI';
 import { pickImage, uploadSalonImage } from '@/services/upload/uploadService';
 import { Screen } from '@/shared/components/Screen';
-import { SurfaceCard } from '@/shared/components/SurfaceCard';
 import { VendorStackParamList } from '@/navigation/navigation.types';
 import { palette } from '@/theme/palette';
 import { typography } from '@/theme/typography';
@@ -22,10 +33,10 @@ type Navigation = NativeStackNavigationProp<VendorStackParamList>;
 type Route = RouteProp<VendorStackParamList, 'ServiceConfigure'>;
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 75, 90, 120, 150, 180];
-const GENDER_OPTIONS: Array<{ value: 'male' | 'female' | 'both'; label: string }> = [
-  { value: 'male', label: 'Men' },
-  { value: 'female', label: 'Women' },
-  { value: 'both', label: 'Unisex' },
+const GENDER_OPTIONS: Array<{ value: 'male' | 'female' | 'both'; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { value: 'male', label: 'Male', icon: 'male-outline' },
+  { value: 'female', label: 'Female', icon: 'female-outline' },
+  { value: 'both', label: 'Unisex', icon: 'people-outline' },
 ];
 
 export function VendorServiceConfigureScreen() {
@@ -69,17 +80,19 @@ export function VendorServiceConfigureScreen() {
 
   if (servicesLoading && !services) {
     return (
-      <Screen>
+      <View style={styles.screen}>
+        <Header onBack={() => navigation.goBack()} />
         <ActivityIndicator color={palette.primary} style={styles.loader} />
-      </Screen>
+      </View>
     );
   }
 
   if (!service) {
     return (
-      <Screen>
+      <View style={styles.screen}>
+        <Header onBack={() => navigation.goBack()} />
         <Text style={styles.emptyText}>Service not found.</Text>
-      </Screen>
+      </View>
     );
   }
 
@@ -142,15 +155,16 @@ export function VendorServiceConfigureScreen() {
   }
 
   return (
-    <Screen scrollable>
-      <Text style={styles.title}>Configure Service</Text>
+    <View style={styles.screen}>
+      <Header onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.card}>
+          <FieldLabel>Service Name</FieldLabel>
+          <View style={styles.fieldBox}>
+            <TextInput style={styles.fieldInput} value={name} onChangeText={setName} />
+          </View>
 
-      <SurfaceCard>
-        <Field label="Service Name">
-          <TextInput style={styles.input} value={name} onChangeText={setName} />
-        </Field>
-
-        <Field label="Category">
+          <FieldLabel spaced>Category</FieldLabel>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {(categories ?? []).map((cat: ServiceCategoryNode) => (
               <Pressable
@@ -165,27 +179,27 @@ export function VendorServiceConfigureScreen() {
               </Pressable>
             ))}
           </ScrollView>
-        </Field>
 
-        {subcategories.length > 0 ? (
-          <Field label="Subcategory">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {subcategories.map((sub: ServiceSubcategoryNode) => (
-                <Pressable
-                  key={sub.id}
-                  style={[styles.chip, subcategoryId === sub.id && styles.chipActive]}
-                  onPress={() => setSubcategoryId(sub.id)}
-                >
-                  <Text style={[styles.chipLabel, subcategoryId === sub.id && styles.chipLabelActive]}>
-                    {sub.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Field>
-        ) : null}
+          {subcategories.length > 0 ? (
+            <>
+              <FieldLabel spaced>Subcategory</FieldLabel>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {subcategories.map((sub: ServiceSubcategoryNode) => (
+                  <Pressable
+                    key={sub.id}
+                    style={[styles.chip, subcategoryId === sub.id && styles.chipActive]}
+                    onPress={() => setSubcategoryId(sub.id)}
+                  >
+                    <Text style={[styles.chipLabel, subcategoryId === sub.id && styles.chipLabelActive]}>
+                      {sub.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
 
-        <Field label="Duration">
+          <FieldLabel spaced>Duration</FieldLabel>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {DURATION_OPTIONS.map((minutes) => (
               <Pressable
@@ -199,180 +213,271 @@ export function VendorServiceConfigureScreen() {
               </Pressable>
             ))}
           </ScrollView>
-        </Field>
 
-        <Field label="Gender">
+          <FieldLabel spaced>Gender</FieldLabel>
           <View style={styles.genderRow}>
-            {GENDER_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt.value}
-                style={[styles.genderButton, genderCategory === opt.value && styles.chipActive]}
-                onPress={() => setGenderCategory(opt.value)}
-              >
-                <Text style={[styles.chipLabel, genderCategory === opt.value && styles.chipLabelActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
+            {GENDER_OPTIONS.map((opt) => {
+              const active = genderCategory === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.genderButton, active && styles.genderButtonActive]}
+                  onPress={() => setGenderCategory(opt.value)}
+                >
+                  <Ionicons name={opt.icon} size={16} color={active ? palette.primary : '#241b14'} />
+                  <Text style={[styles.genderLabel, active && styles.genderLabelActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </Field>
 
-        <Field label="Description">
-          <TextInput
-            style={[styles.input, styles.multiline]}
-            value={description}
-            onChangeText={(v) => setDescription(v.slice(0, 250))}
-            multiline
-          />
-          <Text style={styles.charCount}>{description.length}/250</Text>
-        </Field>
+          <FieldLabel spaced>Description</FieldLabel>
+          <View style={[styles.fieldBox, styles.fieldBoxMultiline]}>
+            <TextInput
+              style={[styles.fieldInput, styles.multiline]}
+              value={description}
+              onChangeText={(v) => setDescription(v.slice(0, 250))}
+              placeholder="Provide a detailed description of the service..."
+              placeholderTextColor="#6b7280"
+              multiline
+            />
+          </View>
+          <Text style={styles.charCount}>{description.length} / 250 characters</Text>
 
-        <Field label="Base Price (₹)">
-          <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-        </Field>
+          <FieldLabel spaced>Base Price (₹)</FieldLabel>
+          <View style={styles.fieldBox}>
+            <TextInput style={styles.fieldInput} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+          </View>
 
-        <Field label="Discount % (optional)">
-          <TextInput
-            style={styles.input}
-            value={discountPercentage}
-            onChangeText={setDiscountPercentage}
-            keyboardType="decimal-pad"
-          />
-        </Field>
+          <FieldLabel spaced>Discount % (optional)</FieldLabel>
+          <View style={styles.fieldBox}>
+            <TextInput
+              style={styles.fieldInput}
+              value={discountPercentage}
+              onChangeText={setDiscountPercentage}
+              keyboardType="decimal-pad"
+            />
+          </View>
 
-        <View style={styles.activeRow}>
-          <Text style={styles.fieldLabel}>Active</Text>
-          <Switch value={isActive} onValueChange={setIsActive} trackColor={{ true: palette.primary }} />
+          <View style={styles.activeRow}>
+            <Text style={styles.activeLabel}>Active</Text>
+            <Switch value={isActive} onValueChange={setIsActive} trackColor={{ true: palette.primary }} />
+          </View>
         </View>
 
-        <Field label="Image">
-          {imageUrl ? <Text style={styles.lineMuted} numberOfLines={1}>{imageUrl}</Text> : null}
-          <Pressable style={styles.uploadButton} disabled={uploading} onPress={handleUploadImage}>
-            <Text style={styles.uploadButtonLabel}>{uploading ? 'Uploading…' : 'Upload Image'}</Text>
+        <View style={styles.card}>
+          <View style={styles.cardHeadingRow}>
+            <Ionicons name="images-outline" size={18} color="#1a1c1c" />
+            <Text style={styles.cardHeading}>Images</Text>
+          </View>
+          <Pressable style={styles.uploadZone} disabled={uploading} onPress={handleUploadImage}>
+            <View style={styles.uploadIconWrap}>
+              <Ionicons name="cloud-upload-outline" size={16} color="#524533" />
+            </View>
+            <Text style={styles.uploadZoneLabel}>{uploading ? 'Uploading…' : 'Click to upload'}</Text>
           </Pressable>
-        </Field>
-      </SurfaceCard>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.imageThumb} /> : null}
+        </View>
 
-      <View style={styles.footer}>
-        <Pressable style={styles.cancelButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelButtonLabel}>Cancel</Text>
-        </Pressable>
-        <Pressable style={styles.saveButton} disabled={updateService.isPending} onPress={handleSave}>
-          <Text style={styles.saveButtonLabel}>{updateService.isPending ? 'Saving…' : 'Save Service'}</Text>
-        </Pressable>
-      </View>
-    </Screen>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
+        <View style={styles.footer}>
+          <Pressable style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelButtonLabel}>Cancel</Text>
+          </Pressable>
+          <Pressable style={styles.saveButton} disabled={updateService.isPending} onPress={handleSave}>
+            <Text style={styles.saveButtonLabel}>{updateService.isPending ? 'Saving…' : 'Save Service'}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
+function Header({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.header}>
+      <Pressable onPress={onBack} hitSlop={12}>
+        <Ionicons name="chevron-back" size={22} color="#1a1c1c" />
+      </Pressable>
+      <Text style={styles.headerTitle}>Configure Service</Text>
+      <View style={{ width: 22 }} />
+    </View>
+  );
+}
+
+function FieldLabel({ children, spaced }: { children: React.ReactNode; spaced?: boolean }) {
+  return <Text style={[styles.fieldLabel, spaced && styles.fieldLabelSpaced]}>{String(children).toUpperCase()}</Text>;
+}
+
 const styles = StyleSheet.create({
-  loader: { marginTop: 40 },
-  emptyText: { color: palette.muted, fontSize: 14 },
-  title: {
-    color: palette.text,
-    fontSize: 22,
-    fontWeight: typography.weight.bold,
-    marginBottom: 16,
+  screen: {
+    backgroundColor: palette.background,
+    flex: 1,
   },
-  field: {
-    marginBottom: 16,
+  header: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    height: 52,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    shadowColor: '#f89e07',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+  },
+  headerTitle: {
+    color: '#1a1c1c',
+    fontSize: 17,
+    fontWeight: typography.weight.semibold,
+  },
+  loader: { marginTop: 40 },
+  emptyText: { color: palette.muted, fontSize: 14, padding: 20 },
+  body: {
+    gap: 16,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 20,
+  },
+  cardHeadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  cardHeading: {
+    color: '#1a1c1c',
+    fontSize: 20,
+    fontWeight: typography.weight.medium,
   },
   fieldLabel: {
-    color: palette.muted,
-    fontSize: 12,
+    color: '#524533',
+    fontSize: 11,
+    fontWeight: typography.weight.semibold,
+    letterSpacing: 1,
     marginBottom: 6,
   },
-  input: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
-    borderRadius: 10,
-    borderWidth: 1,
-    color: palette.text,
-    fontSize: 14,
+  fieldLabelSpaced: {
+    marginTop: 14,
+  },
+  fieldBox: {
+    backgroundColor: '#f3f3f3',
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  fieldBoxMultiline: {
+    minHeight: 80,
+  },
+  fieldInput: {
+    color: '#1a1c1c',
+    fontSize: 15,
+    padding: 0,
+  },
   multiline: {
-    minHeight: 70,
+    minHeight: 60,
     textAlignVertical: 'top',
   },
   charCount: {
-    color: palette.muted,
+    color: '#524533',
     fontSize: 11,
     marginTop: 4,
     textAlign: 'right',
   },
   chip: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
+    backgroundColor: '#f3f3f3',
     borderRadius: 999,
-    borderWidth: 1,
     marginRight: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   chipActive: {
     backgroundColor: palette.primary,
-    borderColor: palette.primary,
   },
   chipLabel: {
-    color: palette.text,
+    color: '#1a1c1c',
     fontSize: 13,
     fontWeight: typography.weight.medium,
   },
   chipLabelActive: {
-    color: palette.surface,
+    color: '#fff',
   },
   genderRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   genderButton: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
-    borderRadius: 12,
+    alignItems: 'center',
+    borderColor: '#e8e4df',
+    borderRadius: 8,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    flex: 1,
+    gap: 4,
+    paddingVertical: 14,
+  },
+  genderButtonActive: {
+    backgroundColor: 'rgba(159,79,45,0.08)',
+    borderColor: palette.primary,
+    borderWidth: 2,
+  },
+  genderLabel: {
+    color: '#241b14',
+    fontSize: 12,
+    fontWeight: typography.weight.semibold,
+  },
+  genderLabelActive: {
+    color: palette.primary,
   },
   activeRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginTop: 16,
   },
-  lineMuted: {
-    color: palette.muted,
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  uploadButton: {
-    alignSelf: 'flex-start',
-    borderColor: palette.primary,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  uploadButtonLabel: {
-    color: palette.primary,
+  activeLabel: {
+    color: '#524533',
     fontSize: 13,
-    fontWeight: typography.weight.semibold,
+    fontWeight: typography.weight.medium,
+  },
+  uploadZone: {
+    alignItems: 'center',
+    borderColor: 'rgba(215,195,172,0.5)',
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    gap: 8,
+    paddingVertical: 18,
+  },
+  uploadIconWrap: {
+    alignItems: 'center',
+    backgroundColor: '#e8e8e8',
+    borderRadius: 999,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  uploadZoneLabel: {
+    color: '#1a1c1c',
+    fontSize: 13,
+    fontWeight: typography.weight.medium,
+  },
+  imageThumb: {
+    borderRadius: 6,
+    height: 48,
+    marginTop: 12,
+    width: 48,
   },
   footer: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 4,
   },
   cancelButton: {
     alignItems: 'center',
