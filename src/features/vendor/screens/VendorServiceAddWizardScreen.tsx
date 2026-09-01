@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -11,8 +12,6 @@ import {
   useUpdateVendorService,
   VendorServiceCreate,
 } from '@/services/api/hooks/useVendorAPI';
-import { Screen } from '@/shared/components/Screen';
-import { SurfaceCard } from '@/shared/components/SurfaceCard';
 import { VendorStackParamList } from '@/navigation/navigation.types';
 import { palette } from '@/theme/palette';
 import { typography } from '@/theme/typography';
@@ -20,11 +19,12 @@ import { typography } from '@/theme/typography';
 type Navigation = NativeStackNavigationProp<VendorStackParamList>;
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 75, 90, 120, 150, 180];
-const GENDER_OPTIONS: Array<{ value: 'male' | 'female' | 'both'; label: string }> = [
-  { value: 'male', label: 'Men' },
-  { value: 'female', label: 'Women' },
-  { value: 'both', label: 'Unisex' },
+const GENDER_OPTIONS: Array<{ value: 'male' | 'female' | 'both'; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { value: 'male', label: 'Men', icon: 'male-outline' },
+  { value: 'female', label: 'Women', icon: 'female-outline' },
+  { value: 'both', label: 'Unisex', icon: 'people-outline' },
 ];
+const STEPPER_STAGES = ['Audience', 'Category', 'Services'];
 
 interface WizardRow {
   localId: string;
@@ -84,6 +84,7 @@ export function VendorServiceAddWizardScreen() {
   const currentContextRows = rows.filter((r) => r.contextId === contextId);
   const savedCount = rows.filter((r) => r.status === 'saved').length;
   const hasErrors = rows.some((r) => r.status === 'error');
+  const activeStage = step >= 3 ? 3 : step;
 
   function handleBack() {
     if (step === 1) {
@@ -264,397 +265,558 @@ export function VendorServiceAddWizardScreen() {
     navigation.goBack();
   }
 
+  const canGoNext =
+    (step === 1 && !!genderCategory) ||
+    (step === 2 && !!categoryId) ||
+    (step === 3 && !!(subcategoryId || subcategoryName.trim()));
+
+  function handlePrimaryFooterAction() {
+    if (step === 1) setStep(2);
+    else if (step === 2) setStep(3);
+    else if (step === 3) handleStep3Continue();
+    else handleDone();
+  }
+
   return (
-    <Screen scrollable>
-      <View style={styles.headerRow}>
-        <Pressable onPress={handleBack}>
-          <Text style={styles.backLabel}>← Back</Text>
+    <View style={styles.screen}>
+      <View style={styles.topBar}>
+        <Pressable onPress={handleBack} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color="#1c1b1b" />
         </Pressable>
-        <Text style={styles.stepLabel}>Step {step} of 4</Text>
       </View>
 
-      {step === 1 ? (
-        <View>
-          <Text style={styles.title}>Who is this for?</Text>
-          <View style={styles.optionList}>
-            {GENDER_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt.value}
-                style={[styles.optionCard, genderCategory === opt.value && styles.optionCardActive]}
-                onPress={() => setGenderCategory(opt.value)}
-              >
-                <Text style={[styles.optionLabel, genderCategory === opt.value && styles.optionLabelActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={[styles.continueButton, !genderCategory && styles.continueButtonDisabled]}
-            disabled={!genderCategory}
-            onPress={() => setStep(2)}
-          >
-            <Text style={styles.continueButtonLabel}>Continue</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <ScrollView contentContainerStyle={styles.body}>
+        <Text style={styles.hero}>Build a service catalog.</Text>
 
-      {step === 2 ? (
-        <View>
-          <Text style={styles.title}>Choose a category</Text>
-          <View style={styles.optionList}>
-            {(categories ?? []).map((cat: ServiceCategoryNode) => (
-              <Pressable
-                key={cat.id}
-                style={[styles.optionCard, categoryId === cat.id && styles.optionCardActive]}
-                onPress={() => {
-                  setCategoryId(cat.id);
-                  setSubcategoryId(undefined);
-                  setSubcategoryName('');
-                  setSubSubcategoryId(undefined);
-                  setSubSubcategoryName('');
-                }}
-              >
-                <Text style={[styles.optionLabel, categoryId === cat.id && styles.optionLabelActive]}>
-                  {cat.name}
-                </Text>
-                {cat.description ? (
-                  <Text style={[styles.optionDescription, categoryId === cat.id && styles.optionLabelActive]}>
-                    {cat.description}
+        <View style={styles.stepper}>
+          {STEPPER_STAGES.map((label, idx) => {
+            const stageNumber = idx + 1;
+            const active = stageNumber <= activeStage;
+            return (
+              <View key={label} style={[styles.stepperPill, active && styles.stepperPillActive]}>
+                <View style={[styles.stepperBadge, active && styles.stepperBadgeActive]}>
+                  <Text style={[styles.stepperBadgeLabel, active && styles.stepperBadgeLabelActive]}>
+                    {String(stageNumber).padStart(2, '0')}
                   </Text>
-                ) : null}
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={[styles.continueButton, !categoryId && styles.continueButtonDisabled]}
-            disabled={!categoryId}
-            onPress={() => setStep(3)}
-          >
-            <Text style={styles.continueButtonLabel}>Continue</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {step === 3 ? (
-        <View>
-          <Text style={styles.title}>Choose a subcategory</Text>
-          <View style={styles.optionList}>
-            {(selectedCategory?.subcategories ?? []).map((sub) => (
-              <Pressable
-                key={sub.id}
-                style={[styles.optionCard, subcategoryId === sub.id && styles.optionCardActive]}
-                onPress={() => {
-                  setSubcategoryId(sub.id);
-                  setSubcategoryName('');
-                  setSubSubcategoryId(undefined);
-                  setSubSubcategoryName('');
-                }}
-              >
-                <Text style={[styles.optionLabel, subcategoryId === sub.id && styles.optionLabelActive]}>
-                  {sub.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Or add a new subcategory…"
-            placeholderTextColor={palette.muted}
-            value={subcategoryName}
-            onChangeText={(v) => {
-              setSubcategoryName(v);
-              if (v) {
-                setSubcategoryId(undefined);
-                setSubSubcategoryId(undefined);
-                setSubSubcategoryName('');
-              }
-            }}
-          />
-
-          {subcategoryId || subcategoryName.trim() ? (
-            <View style={styles.subSubSection}>
-              <Text style={styles.subLabel}>Sub-type (optional)</Text>
-              {subcategoryId ? (
-                <View style={styles.chipRow}>
-                  {(selectedCategory?.subcategories.find((s) => s.id === subcategoryId)?.subcategories ?? []).map(
-                    (sub3) => (
-                      <Pressable
-                        key={sub3.id}
-                        style={[styles.chip, subSubcategoryId === sub3.id && styles.chipActive]}
-                        onPress={() => {
-                          setSubSubcategoryId(sub3.id);
-                          setSubSubcategoryName('');
-                        }}
-                      >
-                        <Text style={[styles.chipLabel, subSubcategoryId === sub3.id && styles.chipLabelActive]}>
-                          {sub3.name}
-                        </Text>
-                      </Pressable>
-                    ),
-                  )}
                 </View>
-              ) : null}
+                <Text style={[styles.stepperLabel, active && styles.stepperLabelActive]}>{label}</Text>
+              </View>
+            );
+          })}
+        </View>
+        <View style={styles.stepperDivider} />
+
+        {step === 1 ? (
+          <>
+            <StepHeader step={1} heading="Select target audience" />
+            <View style={styles.optionList}>
+              {GENDER_OPTIONS.map((opt) => {
+                const active = genderCategory === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[styles.optionCard, active && styles.optionCardActive]}
+                    onPress={() => setGenderCategory(opt.value)}
+                  >
+                    <View style={styles.optionIconWrap}>
+                      <Ionicons name={opt.icon} size={18} color="#615e56" />
+                    </View>
+                    <View style={styles.optionTextWrap}>
+                      <Text style={styles.optionLabel}>{opt.label}</Text>
+                      <Text style={styles.optionDescription}>Services tailored for {opt.label.toLowerCase()}.</Text>
+                    </View>
+                    {active ? (
+                      <View style={styles.optionCheck}>
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {step === 2 ? (
+          <>
+            <StepHeader step={2} heading="Select a category" />
+            <View style={styles.optionList}>
+              {(categories ?? []).map((cat: ServiceCategoryNode) => {
+                const active = categoryId === cat.id;
+                return (
+                  <Pressable
+                    key={cat.id}
+                    style={[styles.optionCard, active && styles.optionCardActive]}
+                    onPress={() => {
+                      setCategoryId(cat.id);
+                      setSubcategoryId(undefined);
+                      setSubcategoryName('');
+                      setSubSubcategoryId(undefined);
+                      setSubSubcategoryName('');
+                    }}
+                  >
+                    <View style={styles.optionTextWrap}>
+                      <Text style={styles.optionLabel}>{cat.name}</Text>
+                      {cat.description ? <Text style={styles.optionDescription}>{cat.description}</Text> : null}
+                    </View>
+                    {active ? (
+                      <View style={styles.optionCheck}>
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {step === 3 ? (
+          <>
+            <StepHeader step={3} heading="Choose a subcategory" />
+            <View style={styles.optionList}>
+              {(selectedCategory?.subcategories ?? []).map((sub) => {
+                const active = subcategoryId === sub.id;
+                return (
+                  <Pressable
+                    key={sub.id}
+                    style={[styles.optionCard, active && styles.optionCardActive]}
+                    onPress={() => {
+                      setSubcategoryId(sub.id);
+                      setSubcategoryName('');
+                      setSubSubcategoryId(undefined);
+                      setSubSubcategoryName('');
+                    }}
+                  >
+                    <View style={styles.optionTextWrap}>
+                      <Text style={styles.optionLabel}>{sub.name}</Text>
+                    </View>
+                    {active ? (
+                      <View style={styles.optionCheck}>
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.shadedField}>
               <TextInput
-                style={styles.input}
-                placeholder="Or add a new sub-type…"
-                placeholderTextColor={palette.muted}
-                value={subSubcategoryName}
+                style={styles.shadedInput}
+                placeholder="Or add a new subcategory…"
+                placeholderTextColor="#867461"
+                value={subcategoryName}
                 onChangeText={(v) => {
-                  setSubSubcategoryName(v);
-                  if (v) setSubSubcategoryId(undefined);
+                  setSubcategoryName(v);
+                  if (v) {
+                    setSubcategoryId(undefined);
+                    setSubSubcategoryId(undefined);
+                    setSubSubcategoryName('');
+                  }
                 }}
               />
             </View>
-          ) : null}
 
-          <Pressable
-            style={[styles.continueButton, !(subcategoryId || subcategoryName.trim()) && styles.continueButtonDisabled]}
-            disabled={!(subcategoryId || subcategoryName.trim())}
-            onPress={handleStep3Continue}
-          >
-            <Text style={styles.continueButtonLabel}>Continue</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {step === 4 ? (
-        <View>
-          <Text style={styles.title}>{contextLabel || 'Add services'}</Text>
-
-          <SurfaceCard>
-            <Text style={styles.subLabel}>Applies to every service added below</Text>
-            <View style={styles.chipRow}>
-              {DURATION_OPTIONS.map((minutes) => (
-                <Pressable
-                  key={minutes}
-                  style={[styles.chip, batchDuration === minutes && styles.chipActive]}
-                  onPress={() => setBatchDuration(minutes)}
-                >
-                  <Text style={[styles.chipLabel, batchDuration === minutes && styles.chipLabelActive]}>
-                    {minutes} min
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={[styles.chipRow, styles.spaced]}>
-              {GENDER_OPTIONS.map((opt) => (
-                <Pressable
-                  key={opt.value}
-                  style={[styles.chip, batchGender === opt.value && styles.chipActive]}
-                  onPress={() => setBatchGender(opt.value)}
-                >
-                  <Text style={[styles.chipLabel, batchGender === opt.value && styles.chipLabelActive]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable onPress={() => setShowMoreOptions((v) => !v)}>
-              <Text style={styles.moreOptionsLabel}>{showMoreOptions ? 'Hide options' : 'More options'}</Text>
-            </Pressable>
-            {showMoreOptions ? (
-              <View style={styles.spaced}>
-                <TextInput
-                  style={[styles.input, styles.multiline]}
-                  placeholder="Shared description (optional)"
-                  placeholderTextColor={palette.muted}
-                  value={batchDescription}
-                  onChangeText={(v) => setBatchDescription(v.slice(0, 250))}
-                  multiline
-                />
-                <TextInput
-                  style={[styles.input, styles.spaced]}
-                  placeholder="Shared discount % (optional)"
-                  placeholderTextColor={palette.muted}
-                  value={batchDiscount}
-                  onChangeText={setBatchDiscount}
-                  keyboardType="decimal-pad"
-                />
+            {subcategoryId || subcategoryName.trim() ? (
+              <View style={styles.subSubSection}>
+                <Text style={styles.subLabel}>Sub-type (optional)</Text>
+                {subcategoryId ? (
+                  <View style={styles.chipRow}>
+                    {(selectedCategory?.subcategories.find((s) => s.id === subcategoryId)?.subcategories ?? []).map(
+                      (sub3) => (
+                        <Pressable
+                          key={sub3.id}
+                          style={[styles.chip, subSubcategoryId === sub3.id && styles.chipActive]}
+                          onPress={() => {
+                            setSubSubcategoryId(sub3.id);
+                            setSubSubcategoryName('');
+                          }}
+                        >
+                          <Text style={[styles.chipLabel, subSubcategoryId === sub3.id && styles.chipLabelActive]}>
+                            {sub3.name}
+                          </Text>
+                        </Pressable>
+                      ),
+                    )}
+                  </View>
+                ) : null}
+                <View style={[styles.shadedField, styles.spaced]}>
+                  <TextInput
+                    style={styles.shadedInput}
+                    placeholder="Or add a new sub-type…"
+                    placeholderTextColor="#867461"
+                    value={subSubcategoryName}
+                    onChangeText={(v) => {
+                      setSubSubcategoryName(v);
+                      if (v) setSubSubcategoryId(undefined);
+                    }}
+                  />
+                </View>
               </View>
             ) : null}
-          </SurfaceCard>
+          </>
+        ) : null}
 
-          <SurfaceCard>
-            <View style={styles.entryRow}>
-              <TextInput
-                style={[styles.input, styles.entryName]}
-                placeholder="Service name"
-                placeholderTextColor={palette.muted}
-                value={rowName}
-                onChangeText={setRowName}
-                onSubmitEditing={handleAddRow}
-              />
-              <TextInput
-                style={[styles.input, styles.entryPrice]}
-                placeholder="Price"
-                placeholderTextColor={palette.muted}
-                value={rowPrice}
-                onChangeText={setRowPrice}
-                keyboardType="decimal-pad"
-                onSubmitEditing={handleAddRow}
-              />
-              <Pressable style={styles.addRowButton} onPress={handleAddRow}>
-                <Text style={styles.addRowButtonLabel}>Add</Text>
+        {step === 4 ? (
+          <>
+            <StepHeader step={4} heading={contextLabel || 'Add services'} />
+
+            <View style={styles.groupCard}>
+              <Text style={styles.subLabel}>Applies to every service added below</Text>
+              <View style={styles.chipRow}>
+                {DURATION_OPTIONS.map((minutes) => (
+                  <Pressable
+                    key={minutes}
+                    style={[styles.chip, batchDuration === minutes && styles.chipActive]}
+                    onPress={() => setBatchDuration(minutes)}
+                  >
+                    <Text style={[styles.chipLabel, batchDuration === minutes && styles.chipLabelActive]}>
+                      {minutes} min
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={[styles.chipRow, styles.spaced]}>
+                {GENDER_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[styles.chip, batchGender === opt.value && styles.chipActive]}
+                    onPress={() => setBatchGender(opt.value)}
+                  >
+                    <Text style={[styles.chipLabel, batchGender === opt.value && styles.chipLabelActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable onPress={() => setShowMoreOptions((v) => !v)}>
+                <Text style={styles.moreOptionsLabel}>{showMoreOptions ? 'Hide options' : 'More options'}</Text>
               </Pressable>
+              {showMoreOptions ? (
+                <View style={styles.spaced}>
+                  <View style={styles.shadedField}>
+                    <TextInput
+                      style={[styles.shadedInput, styles.multiline]}
+                      placeholder="Shared description (optional)"
+                      placeholderTextColor="#867461"
+                      value={batchDescription}
+                      onChangeText={(v) => setBatchDescription(v.slice(0, 250))}
+                      multiline
+                    />
+                  </View>
+                  <View style={[styles.shadedField, styles.spaced]}>
+                    <TextInput
+                      style={styles.shadedInput}
+                      placeholder="Shared discount % (optional)"
+                      placeholderTextColor="#867461"
+                      value={batchDiscount}
+                      onChangeText={setBatchDiscount}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+              ) : null}
             </View>
-          </SurfaceCard>
 
-          {rows.length > 0 ? (
-            <View style={styles.rowList}>
-              {rows.map((row) => (
-                <SurfaceCard key={row.localId}>
-                  {editingRowId === row.localId ? (
-                    <View style={styles.entryRow}>
-                      <TextInput style={[styles.input, styles.entryName]} value={editName} onChangeText={setEditName} />
-                      <TextInput
-                        style={[styles.input, styles.entryPrice]}
-                        value={editPrice}
-                        onChangeText={setEditPrice}
-                        keyboardType="decimal-pad"
-                      />
-                      <Pressable style={styles.addRowButton} onPress={() => saveEdit(row)}>
-                        <Text style={styles.addRowButtonLabel}>Save</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.rowItem}>
-                      <View style={styles.rowInfo}>
-                        <Text style={styles.rowName}>{row.name}</Text>
-                        <Text style={styles.rowPrice}>₹{row.price}</Text>
-                        {row.status === 'error' ? (
+            <View style={styles.groupCard}>
+              <View style={styles.entryRow}>
+                <View style={[styles.shadedField, styles.entryName]}>
+                  <TextInput
+                    style={styles.shadedInput}
+                    placeholder="Service name"
+                    placeholderTextColor="#867461"
+                    value={rowName}
+                    onChangeText={setRowName}
+                    onSubmitEditing={handleAddRow}
+                  />
+                </View>
+                <View style={[styles.shadedField, styles.entryPrice]}>
+                  <TextInput
+                    style={styles.shadedInput}
+                    placeholder="Price"
+                    placeholderTextColor="#867461"
+                    value={rowPrice}
+                    onChangeText={setRowPrice}
+                    keyboardType="decimal-pad"
+                    onSubmitEditing={handleAddRow}
+                  />
+                </View>
+                <Pressable style={styles.addServiceButton} onPress={handleAddRow}>
+                  <Ionicons name="add" size={14} color="#fff" />
+                  <Text style={styles.addServiceButtonLabel}>Add</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {rows.length > 0 ? (
+              <View style={styles.rowList}>
+                {rows.map((row) => (
+                  <View key={row.localId} style={styles.rowCard}>
+                    {editingRowId === row.localId ? (
+                      <View style={styles.entryRow}>
+                        <View style={[styles.shadedField, styles.entryName]}>
+                          <TextInput style={styles.shadedInput} value={editName} onChangeText={setEditName} />
+                        </View>
+                        <View style={[styles.shadedField, styles.entryPrice]}>
+                          <TextInput
+                            style={styles.shadedInput}
+                            value={editPrice}
+                            onChangeText={setEditPrice}
+                            keyboardType="decimal-pad"
+                          />
+                        </View>
+                        <Pressable style={styles.addServiceButton} onPress={() => saveEdit(row)}>
+                          <Text style={styles.addServiceButtonLabel}>Save</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <>
+                        <View style={styles.rowTopRow}>
+                          <Text style={styles.rowName}>{row.name}</Text>
+                          {row.status === 'saving' ? (
+                            <ActivityIndicator color={palette.primary} size="small" />
+                          ) : (
+                            <View style={styles.rowIconActions}>
+                              <Pressable onPress={() => (row.status === 'saved' ? startEdit(row) : handleRetry(row))}>
+                                <Ionicons
+                                  name={row.status === 'saved' ? 'pencil-outline' : 'refresh-outline'}
+                                  size={15}
+                                  color="#615e56"
+                                />
+                              </Pressable>
+                              <Pressable onPress={() => handleDeleteRow(row)}>
+                                <Ionicons name="trash-outline" size={15} color="#ba1a1a" />
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.tagRow}>
+                          <Text style={styles.tag}>₹{row.price}</Text>
+                          <Text style={styles.tag}>{batchDuration} min</Text>
+                          <Text style={styles.tag}>{GENDER_OPTIONS.find((g) => g.value === batchGender)?.label}</Text>
+                        </View>
+                        {row.status === 'saved' ? (
+                          <View style={styles.savedRow}>
+                            <View style={styles.savedPill}>
+                              <Ionicons name="checkmark" size={11} color="#166534" />
+                              <Text style={styles.savedPillLabel}>Saved</Text>
+                            </View>
+                          </View>
+                        ) : row.status === 'error' ? (
                           <Text style={styles.rowError}>{row.errorMessage}</Text>
                         ) : null}
-                      </View>
-                      {row.status === 'saving' ? (
-                        <ActivityIndicator color={palette.primary} />
-                      ) : row.status === 'saved' ? (
-                        <View style={styles.rowActions}>
-                          <Text style={styles.savedCheck}>✓</Text>
-                          <Pressable onPress={() => startEdit(row)}>
-                            <Text style={styles.editLink}>Edit</Text>
-                          </Pressable>
-                          <Pressable onPress={() => handleDeleteRow(row)}>
-                            <Text style={styles.deleteLink}>Delete</Text>
-                          </Pressable>
-                        </View>
-                      ) : (
-                        <View style={styles.rowActions}>
-                          <Pressable onPress={() => handleRetry(row)}>
-                            <Text style={styles.editLink}>Retry</Text>
-                          </Pressable>
-                          <Pressable onPress={() => handleDeleteRow(row)}>
-                            <Text style={styles.deleteLink}>Remove</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </SurfaceCard>
-              ))}
-            </View>
-          ) : null}
+                      </>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-          <View style={styles.footer}>
-            <Pressable style={styles.secondaryButton} onPress={() => setStep(3)}>
-              <Text style={styles.secondaryButtonLabel}>Change subcategory</Text>
+            <Pressable style={styles.changeSubcategoryButton} onPress={() => setStep(3)}>
+              <Text style={styles.changeSubcategoryLabel}>Change subcategory</Text>
             </Pressable>
-            <Pressable style={styles.continueButton} onPress={handleDone}>
-              <Text style={styles.continueButtonLabel}>
-                {savedCount > 0 ? `Done — ${savedCount} added` : 'Done'}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-    </Screen>
+          </>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable style={[styles.backButton, step === 1 && styles.backButtonDisabled]} onPress={handleBack}>
+          <Ionicons name="arrow-back" size={14} color="#615e56" />
+          <Text style={styles.backButtonLabel}>Back</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.nextButton, !canGoNext && step !== 4 && styles.nextButtonDisabled]}
+          disabled={step !== 4 && !canGoNext}
+          onPress={handlePrimaryFooterAction}
+        >
+          <Text style={styles.nextButtonLabel}>
+            {step === 4 ? (savedCount > 0 ? `Finish — ${savedCount} added` : 'Finish') : 'Next'}
+          </Text>
+          <Ionicons name="arrow-forward" size={14} color="#fff" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function StepHeader({ step, heading }: { step: number; heading: string }) {
+  return (
+    <View style={styles.stepHeaderCard}>
+      <Text style={styles.stepEyebrow}>STEP {String(step).padStart(2, '0')}</Text>
+      <Text style={styles.stepHeading}>{heading}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  screen: {
+    backgroundColor: palette.background,
+    flex: 1,
   },
-  backLabel: {
-    color: palette.primary,
-    fontSize: 14,
-    fontWeight: typography.weight.semibold,
+  topBar: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    height: 52,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
-  stepLabel: {
-    color: palette.muted,
-    fontSize: 13,
+  body: {
+    gap: 4,
+    padding: 24,
+    paddingBottom: 40,
   },
-  title: {
-    color: palette.text,
-    fontSize: 22,
+  hero: {
+    color: '#1c1b1b',
+    fontSize: 30,
     fontWeight: typography.weight.bold,
     marginBottom: 16,
   },
-  optionList: {
-    gap: 10,
+  stepper: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  stepperPill: {
+    alignItems: 'center',
+    backgroundColor: '#f0eded',
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  stepperPillActive: {
+    backgroundColor: '#fff',
+    borderColor: '#e8e2d8',
+    borderWidth: 1,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+  },
+  stepperBadge: {
+    alignItems: 'center',
+    height: 20,
+    justifyContent: 'center',
+    width: 20,
+  },
+  stepperBadgeActive: {
+    backgroundColor: palette.primary,
+    borderRadius: 999,
+    height: 24,
+    width: 24,
+  },
+  stepperBadgeLabel: {
+    color: '#615e56',
+    fontSize: 10,
+    fontWeight: typography.weight.bold,
+  },
+  stepperBadgeLabelActive: {
+    color: '#fff',
+  },
+  stepperLabel: {
+    color: '#615e56',
+    fontSize: 12,
+    fontWeight: typography.weight.semibold,
+  },
+  stepperLabelActive: {
+    color: '#1c1b1b',
+  },
+  stepperDivider: {
+    backgroundColor: '#e8e2d8',
+    height: 1,
     marginBottom: 20,
   },
+  stepHeaderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    gap: 6,
+    marginBottom: 20,
+    padding: 24,
+  },
+  stepEyebrow: {
+    color: '#615e56',
+    fontSize: 12,
+    fontWeight: typography.weight.semibold,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  stepHeading: {
+    color: '#1c1b1b',
+    fontSize: 22,
+    fontWeight: typography.weight.semibold,
+  },
+  optionList: {
+    gap: 14,
+    marginBottom: 8,
+  },
   optionCard: {
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#e8e2d8',
     borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
+    flexDirection: 'row',
+    gap: 14,
+    padding: 20,
   },
   optionCardActive: {
-    backgroundColor: palette.primary,
     borderColor: palette.primary,
+    borderWidth: 2,
+  },
+  optionIconWrap: {
+    alignItems: 'center',
+    backgroundColor: '#f0eded',
+    borderRadius: 999,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  optionTextWrap: {
+    flex: 1,
+    gap: 4,
   },
   optionLabel: {
-    color: palette.text,
-    fontSize: 15,
+    color: '#1c1b1b',
+    fontSize: 18,
     fontWeight: typography.weight.semibold,
-  },
-  optionLabelActive: {
-    color: palette.surface,
   },
   optionDescription: {
-    color: palette.muted,
+    color: '#554339',
     fontSize: 13,
-    marginTop: 4,
+    lineHeight: 19,
   },
-  continueButton: {
+  optionCheck: {
     alignItems: 'center',
     backgroundColor: palette.primary,
+    borderRadius: 999,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  shadedField: {
+    backgroundColor: '#fcf9f8',
     borderRadius: 16,
-    paddingVertical: 14,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  continueButtonDisabled: {
-    opacity: 0.4,
-  },
-  continueButtonLabel: {
-    color: palette.surface,
+  shadedInput: {
+    color: '#1c1b1b',
     fontSize: 15,
-    fontWeight: typography.weight.semibold,
-  },
-  input: {
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
-    borderRadius: 10,
-    borderWidth: 1,
-    color: palette.text,
-    fontSize: 14,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 0,
   },
   multiline: {
     minHeight: 60,
     textAlignVertical: 'top',
   },
   subSubSection: {
-    marginTop: 16,
+    marginTop: 20,
   },
   subLabel: {
-    color: palette.text,
+    color: '#554339',
     fontSize: 13,
     fontWeight: typography.weight.semibold,
     marginBottom: 8,
@@ -668,8 +830,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   chip: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
+    backgroundColor: '#fcf9f8',
+    borderColor: '#e8e2d8',
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 14,
@@ -680,18 +842,26 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
   },
   chipLabel: {
-    color: palette.text,
+    color: '#1c1b1b',
     fontSize: 13,
     fontWeight: typography.weight.medium,
   },
   chipLabelActive: {
-    color: palette.surface,
+    color: '#fff',
   },
   moreOptionsLabel: {
     color: palette.primary,
     fontSize: 13,
     fontWeight: typography.weight.semibold,
     marginTop: 12,
+  },
+  groupCard: {
+    backgroundColor: '#fcf9f8',
+    borderColor: '#e8e2d8',
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 20,
   },
   entryRow: {
     alignItems: 'center',
@@ -706,81 +876,144 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: 0,
   },
-  addRowButton: {
+  addServiceButton: {
+    alignItems: 'center',
     backgroundColor: palette.primary,
-    borderRadius: 10,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  addRowButtonLabel: {
-    color: palette.surface,
-    fontSize: 13,
+  addServiceButtonLabel: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: typography.weight.semibold,
   },
   rowList: {
     gap: 10,
-    marginTop: 12,
+    marginBottom: 16,
   },
-  rowItem: {
+  rowCard: {
+    backgroundColor: '#fff',
+    borderColor: '#e8e2d8',
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 16,
+  },
+  rowTopRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  rowInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
   rowName: {
-    color: palette.text,
+    color: '#1c1b1b',
     fontSize: 15,
     fontWeight: typography.weight.semibold,
   },
-  rowPrice: {
-    color: palette.muted,
-    fontSize: 13,
+  rowIconActions: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tag: {
+    backgroundColor: '#f0eded',
+    borderRadius: 6,
+    color: '#554339',
+    fontSize: 11,
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  savedRow: {
+    flexDirection: 'row',
+  },
+  savedPill: {
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  savedPillLabel: {
+    color: '#166534',
+    fontSize: 11,
+    fontWeight: typography.weight.semibold,
   },
   rowError: {
-    color: '#a83a2f',
+    color: '#ba1a1a',
     fontSize: 12,
-    marginTop: 2,
   },
-  rowActions: {
+  changeSubcategoryButton: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  savedCheck: {
-    color: '#2f7a3e',
-    fontSize: 16,
-    fontWeight: typography.weight.bold,
-  },
-  editLink: {
-    color: palette.primary,
-    fontSize: 13,
-    fontWeight: typography.weight.semibold,
-  },
-  deleteLink: {
-    color: '#a83a2f',
-    fontSize: 13,
-    fontWeight: typography.weight.semibold,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 24,
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    borderColor: palette.border,
-    borderRadius: 16,
+    borderColor: '#e8e2d8',
+    borderRadius: 999,
     borderWidth: 1,
-    flex: 1,
+    marginBottom: 8,
     paddingVertical: 14,
   },
-  secondaryButtonLabel: {
-    color: palette.text,
+  changeSubcategoryLabel: {
+    color: '#1c1b1b',
     fontSize: 14,
-    fontWeight: typography.weight.semibold,
+    fontWeight: typography.weight.medium,
+  },
+  footer: {
+    alignItems: 'center',
+    backgroundColor: '#fcf9f8',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    shadowColor: '#c56a2d',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  backButton: {
+    alignItems: 'center',
+    borderColor: '#e8e2d8',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  backButtonDisabled: {
+    opacity: 0.5,
+  },
+  backButtonLabel: {
+    color: '#615e56',
+    fontSize: 14,
+    fontWeight: typography.weight.medium,
+  },
+  nextButton: {
+    alignItems: 'center',
+    backgroundColor: palette.primary,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  nextButtonDisabled: {
+    opacity: 0.4,
+  },
+  nextButtonLabel: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: typography.weight.medium,
   },
 });
