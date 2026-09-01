@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useActiveVendorPromotion, useApplyVendorPromotion } from '@/services/api/hooks/useVendorAPI';
-import { Screen } from '@/shared/components/Screen';
-import { SurfaceCard } from '@/shared/components/SurfaceCard';
 import { VendorStackParamList } from '@/navigation/navigation.types';
 import { palette } from '@/theme/palette';
 import { typography } from '@/theme/typography';
@@ -22,7 +21,7 @@ export function VendorRunPromoScreen() {
   const applyPromo = useApplyVendorPromotion();
 
   const [title, setTitle] = useState('');
-  const [discountType, setDiscountType] = useState<'flat_amount' | 'percentage'>('percentage');
+  const [discountType, setDiscountType] = useState<'flat_amount' | 'percentage'>('flat_amount');
   const [discountValue, setDiscountValue] = useState('');
   const [minBookingAmount, setMinBookingAmount] = useState('');
   const [maxDiscountLimit, setMaxDiscountLimit] = useState('');
@@ -91,165 +90,406 @@ export function VendorRunPromoScreen() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <Screen>
+  return (
+    <View style={styles.screen}>
+      <Header onBack={() => navigation.goBack()} />
+      {isLoading ? (
         <ActivityIndicator color={palette.primary} style={styles.loader} />
-      </Screen>
-    );
-  }
-
-  return (
-    <Screen scrollable>
-      <Text style={styles.title}>Run Promo</Text>
-      <Text style={styles.subtitle}>Apply a flat discount management offer across all your services.</Text>
-
-      {activePromo ? (
-        <SurfaceCard>
-          <Text style={styles.bannerTitle}>
-            Current promo: {activePromo.title} ({activePromo.status})
-          </Text>
-          <Text style={styles.bannerMeta}>
-            {activePromo.start_date} {activePromo.end_date ? `→ ${activePromo.end_date}` : '(no end date)'}
-          </Text>
-          <Text style={styles.bannerMeta}>Applies to all services</Text>
-        </SurfaceCard>
-      ) : null}
-
-      <SurfaceCard>
-        <Field label="Offer Title">
-          <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. Monsoon Special" placeholderTextColor={palette.muted} />
-        </Field>
-
-        <Field label="Discount Type">
-          <View style={styles.toggleRow}>
-            {(['flat_amount', 'percentage'] as const).map((type) => (
-              <Pressable
-                key={type}
-                style={[styles.toggleButton, discountType === type && styles.toggleButtonActive]}
-                onPress={() => setDiscountType(type)}
-              >
-                <Text style={[styles.toggleLabel, discountType === type && styles.toggleLabelActive]}>
-                  {type === 'flat_amount' ? '₹ Flat Amount' : '% Percentage'}
-                </Text>
-              </Pressable>
-            ))}
+      ) : (
+        <View style={styles.body}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroIconWrap}>
+              <Ionicons name="pricetag" size={20} color={palette.primary} />
+            </View>
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.heroTitle}>Flat Discount Offer</Text>
+              <Text style={styles.heroBody}>
+                Apply a fixed price or percentage reduction across all your services. Ideal for flash sales or
+                seasonal promotions.
+              </Text>
+            </View>
           </View>
-        </Field>
 
-        <Field label={discountType === 'percentage' ? 'Discount Value (%)' : 'Discount Value (₹)'}>
-          <TextInput style={styles.input} value={discountValue} onChangeText={setDiscountValue} keyboardType="decimal-pad" />
-        </Field>
+          {activePromo ? (
+            <View style={styles.activeBanner}>
+              <Text style={styles.activeBannerTitle}>
+                Current promo: {activePromo.title} ({activePromo.status})
+              </Text>
+              <Text style={styles.activeBannerMeta}>
+                {activePromo.start_date} {activePromo.end_date ? `→ ${activePromo.end_date}` : '(no end date)'} •
+                Applies to all services
+              </Text>
+            </View>
+          ) : null}
 
-        <Field label="Min. Booking Amount (optional)">
-          <TextInput style={styles.input} value={minBookingAmount} onChangeText={setMinBookingAmount} keyboardType="decimal-pad" />
-        </Field>
+          <SectionHeading>Offer Details</SectionHeading>
+          <View style={styles.card}>
+            <FieldLabel>Offer Title (visible to clients)</FieldLabel>
+            <TextInput
+              style={styles.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Summer Glow Special"
+              placeholderTextColor="#867461"
+            />
 
-        <Field label="Max. Limit (optional)">
-          <TextInput style={styles.input} value={maxDiscountLimit} onChangeText={setMaxDiscountLimit} keyboardType="decimal-pad" />
-        </Field>
+            <FieldLabel spaced>Discount Type</FieldLabel>
+            <View style={styles.segmented}>
+              {(['flat_amount', 'percentage'] as const).map((type) => {
+                const active = discountType === type;
+                return (
+                  <Pressable
+                    key={type}
+                    style={[styles.segmentButton, active && styles.segmentButtonActive]}
+                    onPress={() => setDiscountType(type)}
+                  >
+                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+                      {type === 'flat_amount' ? 'Flat Amount (₹)' : 'Percentage (%)'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-        <Field label="Start Date (YYYY-MM-DD)">
-          <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="2026-01-01" placeholderTextColor={palette.muted} />
-        </Field>
+            <FieldLabel spaced>Discount Value</FieldLabel>
+            <View style={styles.prefixedInputWrap}>
+              <Text style={styles.prefixSymbol}>{discountType === 'percentage' ? '%' : '₹'}</Text>
+              <TextInput
+                style={styles.prefixedInput}
+                value={discountValue}
+                onChangeText={setDiscountValue}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor="#6b7280"
+              />
+            </View>
+          </View>
 
-        <Field label="End Date (optional, YYYY-MM-DD)">
-          <TextInput style={styles.input} value={endDate} onChangeText={setEndDate} placeholder="2026-01-31" placeholderTextColor={palette.muted} />
-        </Field>
-      </SurfaceCard>
+          <SectionHeading>Value & Limits</SectionHeading>
+          <View style={styles.card}>
+            <View style={styles.limitsRow}>
+              <View style={styles.limitField}>
+                <FieldLabel>Min. Booking</FieldLabel>
+                <View style={styles.pillInputWrap}>
+                  <Text style={styles.pillSymbol}>₹</Text>
+                  <TextInput
+                    style={styles.pillInput}
+                    value={minBookingAmount}
+                    onChangeText={setMinBookingAmount}
+                    keyboardType="decimal-pad"
+                    placeholder="Optional"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+              </View>
+              <View style={styles.limitField}>
+                <FieldLabel>Max. Limit</FieldLabel>
+                <View style={styles.pillInputWrap}>
+                  <Text style={styles.pillSymbol}>₹</Text>
+                  <TextInput
+                    style={styles.pillInput}
+                    value={maxDiscountLimit}
+                    onChangeText={setMaxDiscountLimit}
+                    keyboardType="decimal-pad"
+                    placeholder="Optional"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
 
-      <Pressable style={styles.submitButton} disabled={applyPromo.isPending} onPress={handleSubmit}>
-        <Text style={styles.submitButtonLabel}>{applyPromo.isPending ? 'Saving…' : 'Save Promotion'}</Text>
-      </Pressable>
-    </Screen>
-  );
-}
+          <SectionHeading>Validity Period</SectionHeading>
+          <View style={styles.card}>
+            <View style={styles.dateRow}>
+              <View style={styles.dateField}>
+                <FieldLabel>Start Date</FieldLabel>
+                <View style={styles.dateInputWrap}>
+                  <Ionicons name="calendar-outline" size={15} color="#534433" />
+                  <TextInput
+                    style={styles.dateInput}
+                    value={startDate}
+                    onChangeText={setStartDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#867461"
+                  />
+                </View>
+              </View>
+              <View style={styles.dateField}>
+                <FieldLabel>End Date (Optional)</FieldLabel>
+                <View style={styles.dateInputWrap}>
+                  <Ionicons name="calendar-outline" size={15} color="#534433" />
+                  <TextInput
+                    style={styles.dateInput}
+                    value={endDate}
+                    onChangeText={setEndDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#867461"
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
+          <Pressable style={styles.submitButton} disabled={applyPromo.isPending} onPress={handleSubmit}>
+            <Text style={styles.submitButtonLabel}>{applyPromo.isPending ? 'Saving…' : 'Apply Discount'}</Text>
+            <Ionicons name="checkmark" size={16} color="#fff" />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
 
+function Header({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.header}>
+      <Pressable onPress={onBack} hitSlop={12}>
+        <Ionicons name="chevron-back" size={22} color="#221a11" />
+      </Pressable>
+      <Text style={styles.headerTitle}>Flat Discount</Text>
+      <View style={{ width: 22 }} />
+    </View>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.sectionHeading}>{String(children).toUpperCase()}</Text>;
+}
+
+function FieldLabel({ children, spaced }: { children: React.ReactNode; spaced?: boolean }) {
+  return <Text style={[styles.fieldLabel, spaced && styles.fieldLabelSpaced]}>{children}</Text>;
+}
+
 const styles = StyleSheet.create({
-  loader: { marginTop: 40 },
-  title: {
-    color: palette.text,
-    fontSize: 24,
+  screen: {
+    backgroundColor: palette.background,
+    flex: 1,
+  },
+  header: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    flexDirection: 'row',
+    height: 64,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 0,
+  },
+  headerTitle: {
+    color: '#221a11',
+    fontSize: 20,
     fontWeight: typography.weight.bold,
   },
-  subtitle: {
-    color: palette.muted,
-    fontSize: 14,
-    marginBottom: 16,
-    marginTop: 4,
+  loader: { marginTop: 40 },
+  body: {
+    gap: 8,
+    padding: 20,
+    paddingBottom: 40,
   },
-  bannerTitle: {
+  heroCard: {
+    backgroundColor: '#fff',
+    borderColor: 'rgba(240,224,209,0.5)',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+    padding: 17,
+  },
+  heroIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(248,158,7,0.2)',
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  heroTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  heroTitle: {
+    color: '#221a11',
+    fontSize: 18,
+    fontWeight: typography.weight.semibold,
+  },
+  heroBody: {
+    color: '#534433',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  activeBanner: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 14,
+  },
+  activeBannerTitle: {
     color: palette.text,
     fontSize: 14,
     fontWeight: typography.weight.semibold,
   },
-  bannerMeta: {
-    color: palette.muted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  field: {
-    marginBottom: 14,
-  },
-  fieldLabel: {
+  activeBannerMeta: {
     color: palette.muted,
     fontSize: 12,
-    marginBottom: 6,
+    marginTop: 4,
+  },
+  sectionHeading: {
+    borderBottomColor: '#f0e0d1',
+    borderBottomWidth: 1,
+    color: '#534433',
+    fontSize: 13,
+    fontWeight: typography.weight.semibold,
+    letterSpacing: 1.2,
+    marginBottom: 12,
+    paddingBottom: 8,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderColor: 'rgba(240,224,209,0.5)',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 20,
+    padding: 16,
+  },
+  fieldLabel: {
+    color: '#221a11',
+    fontSize: 14,
+    fontWeight: typography.weight.medium,
+    marginBottom: 8,
+  },
+  fieldLabelSpaced: {
+    marginTop: 15,
   },
   input: {
-    backgroundColor: palette.background,
-    borderColor: palette.border,
-    borderRadius: 10,
+    backgroundColor: '#fff8f4',
+    borderColor: '#d9c3ad',
+    borderRadius: 4,
     borderWidth: 1,
-    color: palette.text,
-    fontSize: 14,
-    paddingHorizontal: 12,
+    color: '#221a11',
+    fontSize: 15,
+    paddingHorizontal: 17,
+    paddingVertical: 15,
+  },
+  segmented: {
+    backgroundColor: 'rgba(240,224,209,0.5)',
+    borderRadius: 4,
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+  },
+  segmentButton: {
+    alignItems: 'center',
+    borderRadius: 6,
+    flex: 1,
     paddingVertical: 8,
   },
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 8,
+  segmentButtonActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
   },
-  toggleButton: {
-    borderColor: palette.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    flex: 1,
-    paddingVertical: 10,
-  },
-  toggleButtonActive: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-  toggleLabel: {
-    color: palette.text,
+  segmentLabel: {
+    color: '#534433',
     fontSize: 13,
     fontWeight: typography.weight.medium,
-    textAlign: 'center',
   },
-  toggleLabelActive: {
-    color: palette.surface,
+  segmentLabelActive: {
+    color: '#865300',
+    fontWeight: typography.weight.semibold,
+  },
+  prefixedInputWrap: {
+    alignItems: 'center',
+    backgroundColor: '#fff8f4',
+    borderColor: '#d9c3ad',
+    borderRadius: 4,
+    borderWidth: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+  },
+  prefixSymbol: {
+    color: '#534433',
+    fontSize: 16,
+    marginRight: 8,
+  },
+  prefixedInput: {
+    color: '#221a11',
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 14,
+  },
+  limitsRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  limitField: {
+    flex: 1,
+  },
+  pillInputWrap: {
+    alignItems: 'center',
+    backgroundColor: '#fff1e6',
+    borderRadius: 18,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+  },
+  pillSymbol: {
+    color: '#534433',
+    fontSize: 16,
+    marginRight: 6,
+  },
+  pillInput: {
+    color: '#221a11',
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 16,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  dateField: {
+    flex: 1,
+  },
+  dateInputWrap: {
+    alignItems: 'center',
+    backgroundColor: '#fff8f4',
+    borderColor: '#d9c3ad',
+    borderRadius: 4,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 13,
+  },
+  dateInput: {
+    color: '#221a11',
+    flex: 1,
+    fontSize: 14,
   },
   submitButton: {
     alignItems: 'center',
     backgroundColor: palette.primary,
-    borderRadius: 16,
-    marginTop: 8,
-    marginBottom: 24,
-    paddingVertical: 14,
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingVertical: 16,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   submitButtonLabel: {
-    color: palette.surface,
+    color: '#fff',
     fontSize: 15,
-    fontWeight: typography.weight.semibold,
+    fontWeight: typography.weight.bold,
   },
 });
