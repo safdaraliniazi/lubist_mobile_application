@@ -1,22 +1,22 @@
 import { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PaymentLockedNotice } from '@/features/vendor/components/PaymentLockedNotice';
-import { StatusBadge, getBookingDisplayStatus } from '@/features/vendor/components/StatusBadge';
+import { STATUS_COLORS, StatusBadge, getBookingDisplayStatus } from '@/features/vendor/components/StatusBadge';
 import { useVendorPaymentGate } from '@/features/vendor/hooks/useVendorPaymentGate';
 import { useVendorBookings, VendorBooking } from '@/services/api/hooks/useVendorAPI';
 import { Screen } from '@/shared/components/Screen';
-import { SurfaceCard } from '@/shared/components/SurfaceCard';
 import { VendorStackParamList } from '@/navigation/navigation.types';
 import { palette } from '@/theme/palette';
 import { typography } from '@/theme/typography';
 
 type Navigation = NativeStackNavigationProp<VendorStackParamList>;
 
-type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
-type DateFilter = 'all' | 'today' | 'upcoming' | 'past';
+type QuickFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+type SecondaryFilter = 'pending' | 'confirmed' | 'today' | 'past' | null;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -25,42 +25,57 @@ function todayIso(): string {
 function serviceLine(booking: VendorBooking): string {
   const names = booking.service_names?.length
     ? booking.service_names
-    : (booking.services ?? []).map((s) => s.name).filter(Boolean);
+    : (booking.services ?? []).map((s) => s.name).filter((n): n is string => Boolean(n));
   return names.length > 1 ? `${names[0]} +${names.length - 1} more` : names[0] || 'Service';
+}
+
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+/** Splits a display time like "10:00 AM" into ["10:00", "AM"]; falls back to [raw, ''] otherwise. */
+function splitTime(raw?: string): [string, string] {
+  if (!raw) return ['—', ''];
+  const match = raw.trim().match(/^(\d{1,2}:\d{2})\s*(AM|PM)?$/i);
+  if (!match) return [raw, ''];
+  return [match[1], (match[2] ?? '').toUpperCase()];
 }
 
 export function VendorBookingsScreen() {
   const navigation = useNavigation<Navigation>();
   const { salon, isPaymentPending } = useVendorPaymentGate();
-  const { data: bookings, isLoading } = useVendorBookings();
+  const { data: bookings } = useVendorBookings();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [secondaryFilter, setSecondaryFilter] = useState<SecondaryFilter>(null);
 
   const stats = useMemo(() => {
     const list = bookings ?? [];
     const count = (s: string) => list.filter((b) => b.status === s).length;
-    const revenue = list
-      .filter((b) => b.status === 'completed')
-      .reduce((sum, b) => sum + (b.total_amount ?? 0), 0);
     return {
       total: list.length,
-      pending: count('pending'),
       confirmed: count('confirmed'),
       completed: count('completed'),
       cancelled: count('cancelled'),
-      revenue,
     };
   }, [bookings]);
 
   const filtered = useMemo(() => {
     const today = todayIso();
     return (bookings ?? []).filter((b) => {
-      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-      if (dateFilter === 'today' && b.booking_date !== today) return false;
-      if (dateFilter === 'upcoming' && b.booking_date < today) return false;
-      if (dateFilter === 'past' && b.booking_date >= today) return false;
+      if (quickFilter === 'upcoming' && b.booking_date < today) return false;
+      if (quickFilter === 'completed' && b.status !== 'completed') return false;
+      if (quickFilter === 'cancelled' && b.status !== 'cancelled') return false;
+      if (secondaryFilter === 'pending' && b.status !== 'pending') return false;
+      if (secondaryFilter === 'confirmed' && b.status !== 'confirmed') return false;
+      if (secondaryFilter === 'today' && b.booking_date !== today) return false;
+      if (secondaryFilter === 'past' && b.booking_date >= today) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const haystack = [b.customer_name, b.booking_number, b.customer_phone, b.customer_email]
@@ -71,7 +86,7 @@ export function VendorBookingsScreen() {
       }
       return true;
     });
-  }, [bookings, statusFilter, dateFilter, search]);
+  }, [bookings, quickFilter, secondaryFilter, search]);
 
   if (isPaymentPending) {
     return <PaymentLockedNotice feeAmount={salon?.registration_fee_amount} />;
@@ -79,158 +94,224 @@ export function VendorBookingsScreen() {
 
   return (
     <Screen scrollable>
-      <Text style={styles.title}>Bookings</Text>
+      <Text style={styles.title}>Bookings Management</Text>
+      <Text style={styles.subtitle}>View and manage all salon bookings</Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
-        {[
-          { label: 'Total', value: stats.total },
-          { label: 'Pending', value: stats.pending },
-          { label: 'Confirmed', value: stats.confirmed },
-          { label: 'Completed', value: stats.completed },
-          { label: 'Cancelled', value: stats.cancelled },
-          { label: 'Revenue', value: `₹${stats.revenue.toLocaleString()}` },
-        ].map((stat) => (
-          <View key={stat.label} style={styles.statCard}>
-            <Text style={styles.statValue}>{stat.value}</Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      <View style={styles.statsGrid}>
+        <StatTile label="Total" value={stats.total} color={palette.primary} />
+        <StatTile label="Confirmed" value={stats.confirmed} color={STATUS_COLORS.confirmed.fg} />
+        <StatTile label="Completed" value={stats.completed} color={STATUS_COLORS.completed.fg} />
+        <StatTile label="Cancelled" value={stats.cancelled} color={STATUS_COLORS.cancelled.fg} />
+      </View>
 
-      <TextInput
-        style={styles.search}
-        placeholder="Search by customer, phone, booking #"
-        placeholderTextColor={palette.muted}
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View style={styles.searchWrap}>
+        <Ionicons name="search-outline" size={18} color={palette.muted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.search}
+          placeholder="Search bookings..."
+          placeholderTextColor={palette.muted}
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-        {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((filter) => (
+        {(['all', 'upcoming', 'completed', 'cancelled'] as QuickFilter[]).map((filter) => (
           <Pressable
             key={filter}
-            style={[styles.chip, statusFilter === filter && styles.chipActive]}
-            onPress={() => setStatusFilter(filter)}
+            style={[styles.filterChip, quickFilter === filter && styles.filterChipActive]}
+            onPress={() => setQuickFilter(filter)}
           >
-            <Text style={[styles.chipLabel, statusFilter === filter && styles.chipLabelActive]}>
-              {filter === 'all' ? 'All' : filter[0].toUpperCase() + filter.slice(1)}
-            </Text>
-          </Pressable>
-        ))}
-        {(['today', 'upcoming', 'past'] as DateFilter[]).map((filter) => (
-          <Pressable
-            key={filter}
-            style={[styles.chip, dateFilter === filter && styles.chipActive]}
-            onPress={() => setDateFilter(dateFilter === filter ? 'all' : filter)}
-          >
-            <Text style={[styles.chipLabel, dateFilter === filter && styles.chipLabelActive]}>
+            <Text style={[styles.filterChipLabel, quickFilter === filter && styles.filterChipLabelActive]}>
               {filter[0].toUpperCase() + filter.slice(1)}
             </Text>
           </Pressable>
         ))}
       </ScrollView>
 
-      {isLoading && !bookings ? (
-        <ActivityIndicator color={palette.primary} style={styles.loader} />
-      ) : filtered.length === 0 ? (
-        <SurfaceCard>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.secondaryRow}>
+        {(['pending', 'confirmed', 'today', 'past'] as Exclude<SecondaryFilter, null>[]).map((filter) => (
+          <Pressable
+            key={filter}
+            style={[styles.secondaryChip, secondaryFilter === filter && styles.secondaryChipActive]}
+            onPress={() => setSecondaryFilter(secondaryFilter === filter ? null : filter)}
+          >
+            <Text style={[styles.secondaryChipLabel, secondaryFilter === filter && styles.secondaryChipLabelActive]}>
+              {filter[0].toUpperCase() + filter.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {filtered.length === 0 ? (
+        <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>No bookings match these filters</Text>
-        </SurfaceCard>
+        </View>
       ) : (
         <View style={styles.list}>
-          {filtered.map((booking) => (
-            <Pressable
-              key={booking.id}
-              onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
-            >
-              <SurfaceCard>
-                <View style={styles.bookingRow}>
-                  <View style={styles.bookingInfo}>
-                    <Text style={styles.bookingName}>{booking.customer_name || 'Guest'}</Text>
-                    <Text style={styles.bookingMeta}>{serviceLine(booking)}</Text>
-                    <Text style={styles.bookingMeta}>
-                      {booking.booking_date} • {booking.time_slots?.[0] ?? ''}
+          {filtered.map((booking) => {
+            const displayStatus = getBookingDisplayStatus(booking.status, booking.booking_date);
+            const accent = STATUS_COLORS[displayStatus].fg;
+            const cancelled = booking.status === 'cancelled';
+            const [time, ampm] = splitTime(booking.time_slots?.[0]);
+            const name = booking.customer_name || 'Guest';
+
+            return (
+              <Pressable
+                key={booking.id}
+                onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
+              >
+                <View style={[styles.card, { borderLeftColor: accent }, cancelled && styles.cardMuted]}>
+                  <View style={[styles.timeBlock, { backgroundColor: `${accent}1a` }]}>
+                    <Text style={[styles.timeValue, { color: accent }, cancelled && styles.timeValueStrike]}>
+                      {time}
                     </Text>
+                    {ampm ? <Text style={styles.timeSuffix}>{ampm}</Text> : null}
                   </View>
-                  <StatusBadge status={getBookingDisplayStatus(booking.status, booking.booking_date)} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarLabel}>{initials(name)}</Text>
+                      </View>
+                      <View style={styles.cardInfo}>
+                        <Text style={styles.cardName}>{name}</Text>
+                        <Text style={styles.cardMeta}>
+                          {serviceLine(booking)} • {booking.duration_minutes} min
+                        </Text>
+                      </View>
+                    </View>
+                    <StatusBadge status={displayStatus} />
+                  </View>
                 </View>
-              </SurfaceCard>
-            </Pressable>
-          ))}
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </Screen>
   );
 }
 
+function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.statTile}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   title: {
-    color: palette.text,
-    fontSize: 26,
+    color: '#221a11',
+    fontSize: 24,
     fontWeight: typography.weight.bold,
-    marginBottom: 16,
   },
-  statsRow: {
-    marginBottom: 14,
+  subtitle: {
+    color: '#534433',
+    fontSize: 16,
+    marginBottom: 20,
+    marginTop: 4,
   },
-  statCard: {
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
-    borderRadius: 16,
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 20,
+  },
+  statTile: {
+    backgroundColor: '#fff',
+    borderColor: '#fcebdc',
+    borderRadius: 8,
     borderWidth: 1,
-    marginRight: 10,
-    minWidth: 84,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  statValue: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: typography.weight.bold,
+    flexBasis: '46%',
+    flexGrow: 1,
+    padding: 17,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
   statLabel: {
-    color: palette.muted,
-    fontSize: 12,
-    marginTop: 2,
+    color: '#534433',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: typography.weight.semibold,
+  },
+  searchWrap: {
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  searchIcon: {
+    left: 12,
+    position: 'absolute',
+    zIndex: 1,
   },
   search: {
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
-    borderRadius: 14,
+    backgroundColor: '#fff',
+    borderColor: '#d9c3ad',
+    borderRadius: 12,
     borderWidth: 1,
     color: palette.text,
     fontSize: 14,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingLeft: 41,
+    paddingRight: 14,
+    paddingVertical: 14,
   },
   filterRow: {
-    marginBottom: 16,
+    flexGrow: 0,
+    marginBottom: 10,
   },
-  chip: {
-    backgroundColor: palette.surface,
+  filterChip: {
+    backgroundColor: '#eae0d3',
+    borderRadius: 12,
+    marginRight: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+  },
+  filterChipActive: {
+    backgroundColor: palette.primary,
+  },
+  filterChipLabel: {
+    color: '#534433',
+    fontSize: 14,
+    fontWeight: typography.weight.medium,
+  },
+  filterChipLabelActive: {
+    color: '#fff',
+  },
+  secondaryRow: {
+    flexGrow: 0,
+    marginBottom: 20,
+  },
+  secondaryChip: {
+    backgroundColor: 'transparent',
     borderColor: palette.border,
     borderRadius: 999,
     borderWidth: 1,
     marginRight: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  chipActive: {
-    backgroundColor: palette.primary,
+  secondaryChipActive: {
+    backgroundColor: palette.surface,
     borderColor: palette.primary,
   },
-  chipLabel: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: typography.weight.medium,
+  secondaryChipLabel: {
+    color: palette.muted,
+    fontSize: 12,
   },
-  chipLabelActive: {
-    color: palette.surface,
+  secondaryChipLabelActive: {
+    color: palette.primary,
+    fontWeight: typography.weight.semibold,
   },
-  loader: {
-    marginVertical: 24,
+  emptyCard: {
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    padding: 20,
   },
   emptyText: {
     color: palette.muted,
@@ -238,25 +319,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   list: {
-    gap: 12,
+    gap: 16,
+    marginBottom: 24,
   },
-  bookingRow: {
+  card: {
+    backgroundColor: '#fffdfc',
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    shadowColor: '#543e00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  cardMuted: {
+    opacity: 0.75,
+  },
+  timeBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    width: 88,
+  },
+  timeValue: {
+    fontSize: 20,
+    fontWeight: typography.weight.semibold,
+  },
+  timeValueStrike: {
+    textDecorationLine: 'line-through',
+  },
+  timeSuffix: {
+    color: '#534433',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  cardBody: {
+    flex: 1,
+    gap: 12,
+    padding: 16,
+  },
+  cardTopRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  bookingInfo: {
-    flex: 1,
-    gap: 4,
-    marginRight: 12,
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: '#ede1d2',
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
   },
-  bookingName: {
-    color: palette.text,
+  avatarLabel: {
+    color: '#6b6357',
     fontSize: 16,
     fontWeight: typography.weight.semibold,
   },
-  bookingMeta: {
-    color: palette.muted,
+  cardInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  cardName: {
+    color: '#221a11',
+    fontSize: 14,
+    fontWeight: typography.weight.semibold,
+  },
+  cardMeta: {
+    color: '#534433',
     fontSize: 13,
   },
 });

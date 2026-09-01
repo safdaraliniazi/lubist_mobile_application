@@ -10,7 +10,7 @@ export type BookingDisplayStatus =
   | 'cancelled'
   | 'no_show';
 
-const STATUS_CONFIG: Record<BookingDisplayStatus, { label: string; bg: string; fg: string }> = {
+export const STATUS_COLORS: Record<BookingDisplayStatus, { label: string; bg: string; fg: string }> = {
   pending: { label: 'Waiting', bg: '#f3f4f6', fg: '#4b5563' },
   confirmed: { label: 'Confirmed', bg: '#f8e5ca', fg: '#8c5a2b' },
   in_progress: { label: 'In Progress', bg: '#fef3c7', fg: '#b45309' },
@@ -29,11 +29,11 @@ export function getBookingDisplayStatus(status: string, bookingDate?: string): B
     const today = new Date().toISOString().slice(0, 10);
     if (bookingDate === today) return 'in_progress';
   }
-  return (STATUS_CONFIG[status as BookingDisplayStatus] ? status : 'pending') as BookingDisplayStatus;
+  return (STATUS_COLORS[status as BookingDisplayStatus] ? status : 'pending') as BookingDisplayStatus;
 }
 
 export function StatusBadge({ status }: { status: BookingDisplayStatus }) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  const config = STATUS_COLORS[status] ?? STATUS_COLORS.pending;
   return (
     <View style={[styles.badge, { backgroundColor: config.bg }]}>
       <Text style={[styles.label, { color: config.fg }]}>{config.label}</Text>
