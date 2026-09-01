@@ -11,11 +11,11 @@ export type BookingDisplayStatus =
   | 'no_show';
 
 const STATUS_CONFIG: Record<BookingDisplayStatus, { label: string; bg: string; fg: string }> = {
-  pending: { label: 'Waiting', bg: '#fdf1de', fg: '#a3691a' },
-  confirmed: { label: 'Confirmed', bg: '#e3f0e5', fg: '#2f7a3e' },
-  in_progress: { label: 'In Progress', bg: '#e6edfb', fg: '#3454a8' },
-  completed: { label: 'Completed', bg: '#e6edfb', fg: '#3454a8' },
-  cancelled: { label: 'Cancelled', bg: '#f6e3e1', fg: '#a83a2f' },
+  pending: { label: 'Waiting', bg: '#f3f4f6', fg: '#4b5563' },
+  confirmed: { label: 'Confirmed', bg: '#f8e5ca', fg: '#8c5a2b' },
+  in_progress: { label: 'In Progress', bg: '#fef3c7', fg: '#b45309' },
+  completed: { label: 'Completed', bg: '#e6f4ea', fg: '#1e8e3e' },
+  cancelled: { label: 'Cancelled', bg: '#fce8e8', fg: '#c5221f' },
   no_show: { label: 'No Show', bg: '#f0e6e1', fg: '#8a5a3a' },
 };
 
