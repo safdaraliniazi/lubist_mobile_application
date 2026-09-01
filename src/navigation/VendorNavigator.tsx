@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { VendorBookingsScreen } from '@/features/vendor/screens/VendorBookingsScreen';
 import { VendorDashboardScreen } from '@/features/vendor/screens/VendorDashboardScreen';
 import { VendorProfileScreen } from '@/features/vendor/screens/VendorProfileScreen';
+import { VendorServicesScreen } from '@/features/vendor/screens/VendorServicesScreen';
 import { palette } from '@/theme/palette';
 
 import { VendorTabParamList } from './navigation.types';
@@ -24,8 +25,9 @@ export function VendorNavigator() {
         tabBarIcon: ({ color, size }) => {
           const iconMap = {
             Dashboard: 'grid-outline',
-            Bookings: 'calendar-outline',
             Profile: 'person-circle-outline',
+            Services: 'cut-outline',
+            Bookings: 'calendar-outline',
           } as const;
 
           return <Ionicons name={iconMap[route.name]} size={size} color={color} />;
@@ -33,8 +35,9 @@ export function VendorNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={VendorDashboardScreen} />
-      <Tab.Screen name="Bookings" component={VendorBookingsScreen} />
       <Tab.Screen name="Profile" component={VendorProfileScreen} />
+      <Tab.Screen name="Services" component={VendorServicesScreen} />
+      <Tab.Screen name="Bookings" component={VendorBookingsScreen} />
     </Tab.Navigator>
   );
 }
